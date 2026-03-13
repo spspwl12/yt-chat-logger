@@ -1,0 +1,507 @@
+<!DOCTYPE html>
+<html lang="ko">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1.0, user-scalable=no">
+    <title>Live Chat</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box
+        }
+
+        body {
+            background: #0f0f0f;
+            color: #fff;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            zoom: 150%;
+            overflow-y: auto;
+        }
+
+        #main-logo {
+            cursor: pointer;
+        }
+
+        .chat-container {
+            background: #1a1a1a;
+            width: 100%;
+            border-radius: 12px;
+            display: flex;
+            flex-direction: column;
+            box-shadow: 0 4px 20px rgba(22, 16, 16, 0.5)
+        }
+
+        .chat-header {
+            position: fixed;
+            top: 0;
+            z-index: 10000;
+            width: 100%;
+            padding: 12px 16px;
+            background: #212121;
+            border-bottom: 1px solid #303030;
+            display: flex;
+            align-items: center;
+            gap: 12px
+        }
+
+        .chat-header h3 {
+            font-size: 14px;
+            font-weight: 500;
+            flex: 1
+        }
+
+        .search-container {
+            display: flex;
+            background: #212121;
+            flex-grow: 2;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+
+        .search-input {
+            width: 80%;
+            flex: 1;
+            padding: 8px 12px;
+            background: #121212;
+            border: 1px solid #303030;
+            border-radius: 20px;
+            color: #fff;
+            font-size: 13px;
+            outline: none;
+            transition: border .2s
+        }
+
+        .search-input:focus {
+            border-color: #3ea6ff
+        }
+
+        .search-input::placeholder {
+            color: #717171
+        }
+
+        .chat-messages {
+            flex: 1;
+            padding: 75px 12px 12px;
+            display: flex;
+            flex-direction: column;
+            gap: 8px
+        }
+
+        .chat-messages::-webkit-scrollbar {
+            width: 8px
+        }
+
+        .chat-messages::-webkit-scrollbar-track {
+            background: #1a1a1a
+        }
+
+        .chat-messages::-webkit-scrollbar-thumb {
+            background: #404040;
+            border-radius: 4px
+        }
+
+        .chat-messages::-webkit-scrollbar-thumb:hover {
+            background: #555
+        }
+
+        .message {
+            display: flex;
+            gap: 12px;
+            padding: 4px 8px;
+            border-radius: 4px;
+            transition: background .2s;
+        }
+
+        .message:hover {
+            background: #272727
+        }
+
+        .avatar {
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            flex-shrink: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 11px;
+            font-weight: 500
+        }
+
+        .message-content {
+            flex: 1;
+            min-width: 0
+        }
+
+        .message-header {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 2px;
+        }
+
+        .username {
+            font-size: 12px;
+            color: #3ea6ff;
+            font-weight: 500;
+            cursor: pointer;
+            text-decoration: none;
+            word-break: break-all;
+        }
+
+        .username:hover {
+            text-decoration: underline;
+        }
+
+        .badge {
+            font-size: 10px;
+            padding: 1px 4px;
+            border-radius: 2px;
+            font-weight: 500
+        }
+
+        .badge.member {
+            background: #2ba640
+        }
+
+        .badge.moderator {
+            background: #5e84f1
+        }
+
+        .timestamp {
+            font-size: 11px;
+            color: #717171;
+            margin-left: auto
+        }
+
+        .message-text {
+            font-size: 13px;
+            color: #f1f1f1;
+            word-wrap: break-word;
+            line-height: 1.4;
+            cursor: pointer;
+            text-decoration: none;
+        }
+
+        .message-text:hover {
+            text-decoration: underline;
+        }
+
+        .highlight {
+            background-color: yellow !important;
+            transition: background-color 0.5s ease;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 16px;
+            color: #717171;
+            font-size: 13px
+        }
+
+        .spinner {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 2px solid #303030;
+            border-top-color: #3ea6ff;
+            border-radius: 50%;
+            animation: spin .8s linear infinite
+        }
+
+        .super-chat {
+            width: 100px;
+            border-radius: 20px;
+            box-shadow: 0 8px 16px rgba(0, 0, 0, 0.2);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            color: white;
+        }
+
+        @keyframes spin {
+            to {
+                transform: rotate(360deg)
+            }
+        }
+
+        .no-more {
+            text-align: center;
+            padding: 12px;
+            color: #717171;
+            font-size: 12px;
+            background: #252525;
+            border-radius: 8px;
+            margin: 8px 0
+        }
+
+        .status-bar {
+            padding: 8px 12px;
+            background: #252525;
+            text-align: center;
+            font-size: 11px;
+            color: #717171;
+            border-top: 1px solid #303030
+        }
+
+        .empty {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            color: #717171;
+            gap: 8px
+        }
+    </style>
+    <script src="https://cdn.jsdelivr.net/npm/lz-string/libs/lz-string.min.js"></script>
+</head>
+
+<body>
+    <div class="chat-container" id="chatContainer">
+        <div class="chat-header">
+            <svg id="main-logo" width="24" height="24" viewBox="0 0 24 24" fill="#fff">
+                <path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm0 14H6l-2 2V4h16v12z" />
+            </svg>
+            <h3>채팅 로그</h3>
+            <div class="search-container">
+                <input type="text" class="search-input" id="channelID" placeholder="방 아이디" value="">
+                <input type="text" class="search-input" id="searchInput" placeholder="채팅 검색..." value="">
+            </div>
+        </div>
+        <div class="chat-messages" id="chatMessages"></div>
+    </div>
+    <script>
+        const mainLogo = document.getElementById('main-logo');
+        const chatMessages = document.getElementById('chatMessages');
+        const chatContainer = document.getElementById('chatContainer');
+        const channelID = document.getElementById('channelID');
+        const searchInput = document.getElementById('searchInput');
+        let loading = false
+        let hasMoreD = true
+        let hasMoreU = true
+        let timer = null
+        let firstID = 0
+        let lastID = 999999999999999;
+        function render(element) {
+            const buffer = LZString.decompressFromUTF16(bufferToUTF16LE(element.message.data));
+            const message = buffer.length > 1 ? JSON.parse(buffer) : {};
+            const d = document.createElement('div');
+            d.className = 'message';
+            d.setAttribute("data-id", element.id);
+            d.setAttribute("data-channel", element.channel);
+            d.innerHTML = `
+        <img class="avatar" src="${element.authorThumb}" width="24" height="24">
+        <div class="message-content">
+            <div class="message-header">
+                <span class="username" data-user="${element.authorId}">${element.author}</span>
+                <span class="timestamp">${element.channel} - ${toTimeString(new Date(element.timestamp))}</span>
+            </div>
+            <div class="message-text">
+                ${message.s ? `<div class="super-chat" style="background-color:${message.s.color};">${message.s.amount}</div>` : ''}
+                ${message.m.map(e => {
+                if (e.url)
+                    return `<img src="${e.url}" width="24" height="24">`;
+                return e.text;
+            }).join('')}
+            </div>
+        </div>`;
+            const e2 = d.getElementsByClassName("message-text")[0];
+            e2.addEventListener('dblclick', function (e) {
+                e.preventDefault();
+                channelID.value = findParentDataId(e.target, "data-channel");
+                searchInput.value = "";
+                const targetID = parseInt(findParentDataId(e.target, "data-id"));
+                load(true, targetID, "up|down").then(() => {
+                    const e = document.querySelector(`[data-id='${targetID}']`);
+                    if (e) {
+                        e.classList.add("highlight");
+                        setTimeout(() => {
+                            e.classList.remove("highlight");
+                        }, 500);
+                        e.scrollIntoView({
+                            behavior: "auto",
+                            block: "center"
+                        });
+                    }
+                });
+            });
+            const e3 = d.getElementsByClassName("username")[0];
+            e3.addEventListener('dblclick', function (e) {
+                e.preventDefault();
+                searchInput.value = e.target.getAttribute("data-user");
+                load(true, 0, "down");
+            });
+            return d
+        }
+        function setScrollPos(pos) {
+            document.documentElement.scrollTop = pos;
+        }
+        function toTimeString(now) {
+            const y = now.getFullYear();
+            const m = String(now.getMonth() + 1).padStart(2, '0');
+            const d = String(now.getDate()).padStart(2, '0');
+            const h = String(now.getHours()).padStart(2, '0');
+            const min = String(now.getMinutes()).padStart(2, '0');
+            const s = String(now.getSeconds()).padStart(2, '0');
+            return `${y}-${m}-${d} ${h}:${min}:${s}`;
+        }
+        function bufferToUTF16LE(buf) {
+            let result = "";
+            for (let i = 0; i < buf.length; i += 2) {
+                const code = buf[i] | (buf[i + 1] << 8); // LE: low + high
+                result += String.fromCharCode(code);
+            }
+            return result;
+        }
+        function showLoading() {
+            const d = document.createElement('div');
+            d.className = 'loading';
+            d.id = 'loader';
+            d.innerHTML = '<div class="spinner"></div> 로딩중...';
+            chatMessages.appendChild(d)
+        }
+        function hideLoading() {
+            const l = document.getElementById('loader');
+            l && l.remove()
+        }
+        function showEnd() {
+            const d = document.createElement('div');
+            d.className = 'no-more';
+            d.textContent = '더 이상 메시지가 없습니다';
+            chatMessages.appendChild(d);
+        }
+        function showEmpty() {
+            chatMessages.innerHTML = '<div class="empty">' +
+                '<svg width="48" height="48" viewBox="0 0 24 24" fill="#717171">' +
+                '<path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm0 14H6l-2 2V4h16v12z"/>' +
+                '</svg>' +
+                '<span>검색 결과가 없습니다</span>' +
+                '</div>';
+        }
+        async function load(reset = false, targetID = 0, dir = "down") {
+            if (!reset) {
+                if (!hasMoreD && dir.includes("down"))
+                    return;
+                if (!hasMoreU && dir.includes("up"))
+                    return;
+            }
+
+            if (reset) {
+                hasMoreD = hasMoreU = true;
+                firstID = 0;
+                lastID = 999999999999999;
+                if (timer) {
+                    timer = null;
+                    clearInterval(timer);
+                }
+                chatMessages.innerHTML = '';
+                setScrollPos(0);
+                if (targetID > 0)
+                    lastID = firstID = targetID;
+            }
+            localStorage.setItem("channelID.value", channelID.value);
+            localStorage.setItem("searchInput.value", searchInput.value);
+            const getContents = async (a, b) => {
+                showLoading();
+                try {
+                    const res = await fetch(
+                        `/${a}?channel=${encodeURIComponent(channelID.value.trim())}` +
+                        `&search=${encodeURIComponent(searchInput.value.trim())}` +
+                        `&start=${b}`
+                    );
+                    const json = await res.json();
+                    hideLoading();
+                    if (json.length > 0) {
+                        if (a === "data") {
+                            json.forEach(m => chatMessages.appendChild(render(m)));
+                            const l_id = json[json.length - 1].id;
+                            if (l_id < lastID)
+                                lastID = l_id;
+                        }
+                        else if (a === "udata") {
+                            const scrollHeight = document.documentElement.scrollHeight;
+                            json.forEach(m => chatMessages.prepend(render(m)));
+                            setScrollPos(document.documentElement.scrollHeight - scrollHeight);
+                            const f_id = json[json.length - 1].id;
+                            if (firstID < f_id)
+                                firstID = f_id;
+                            firstID++;
+                        }
+                    } else {
+                        if (dir.includes("up"))
+                            hasMoreU = false;
+                        if (dir.includes("down")) {
+                            hasMoreD = false;
+                            lastID === 999999999999999 ? showEmpty() : showEnd();
+                        }
+                    }
+                } catch (e) {
+                    hideLoading();
+                    console.error(e)
+                    return false;
+                }
+
+                return true;
+            };
+            loading = true;
+            if (dir.includes("up"))
+                await getContents("udata", firstID);
+            if (dir.includes("down"))
+                await getContents("data", lastID);
+            loading = false;
+        }
+        function onScroll() {
+            const { scrollTop, scrollHeight, clientHeight } = document.documentElement;
+            const bottom = scrollHeight - scrollTop - clientHeight;
+            if (loading)
+                return;
+            if (bottom < 200 && hasMoreD)
+                load(false, 0, "down");
+            else if (scrollTop < 100 && hasMoreU && firstID > 0) {
+                load(false, 0, "up");
+            }
+        }
+        function onSearch(e) {
+            clearTimeout(timer);
+            timer = setTimeout(() => {
+                timer = null;
+                load(true, 0, "down");
+            }, 1000)
+        }
+        function findParentDataId(element, attr) {
+            let current = element.parentNode;
+            while (current && current.nodeType === 1) {
+                if (current.hasAttribute(attr)) {
+                    return current.getAttribute(attr);
+                }
+                current = current.parentNode;
+            }
+            return null;
+        }
+        function adjustContentMargin() {
+            const header = document.querySelector('.chat-header');
+            const content = document.querySelector('.chat-messages');
+            content.style.paddingTop = (header.offsetHeight + 20) + 'px';
+        }
+        channelID.value = localStorage.getItem("channelID.value");
+        searchInput.value = localStorage.getItem("searchInput.value");
+        window.addEventListener('scroll', onScroll);
+        window.addEventListener('resize', adjustContentMargin);
+        mainLogo.addEventListener('mousedown', (e) => {
+            e.preventDefault();
+            channelID.value = searchInput.value = '';
+            load(true, 0, "down");
+        });
+        channelID.addEventListener('input', onSearch);
+        searchInput.addEventListener('input', onSearch);
+        load(false, 0, "down");
+        adjustContentMargin();
+    </script>
+</body>
+
+</html>
