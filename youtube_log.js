@@ -4,7 +4,7 @@ const mysql = require("mysql2/promise");
 const crypto = require("crypto");
 const path = require("path");
 const fs = require('fs');
-const LZString = require("lz-string");
+const zlib = require("zlib");
 const mecab = require('./mecab-ya.js');
 
 const DATA_FILE = './data.json';
@@ -22,6 +22,9 @@ const yt = {};
 const dbBuffer = [];
 let dbConnected = false;
 let isFlushing = false;
+
+// authorId -> { uid, profiles: Map<cacheKey, nid> }
+const userCache = new Map();
 
 function readData() {
     if (!fs.existsSync(DATA_FILE))
@@ -60,7 +63,7 @@ function NVL(e) {
     return e ?? " ";
 }
 
-let dbConnectionPromise = null;
+let pool = null;
 
 const DB_CONN_ERROR_CODES = [
     'PROTOCOL_CONNECTION_LOST', 'ECONNRESET', 'ECONNREFUSED',
@@ -78,55 +81,116 @@ function isConnectionError(err) {
     return false;
 }
 
-function createConnectionPromise() {
-    return mysql.createConnection({
+async function ensureIndexes(conn) {
+    const indexDefs = [
+        // youtube_chat3: channel 필터용
+        `ALTER TABLE youtube_chat3 ADD INDEX idx_channel (channel)`,
+        // youtube_chat3: nid JOIN용
+        `ALTER TABLE youtube_chat3 ADD INDEX idx_nid (nid)`,
+        // youtube_chat3: channel+id 복합 (채널필터+정렬)
+        `ALTER TABLE youtube_chat3 ADD INDEX idx_channel_id (channel, id)`,
+        // youtube_user_names: uid+author+thumb 조회용
+        `ALTER TABLE youtube_user_names ADD INDEX idx_uid_author_thumb (uid, author, thumb)`,
+        // youtube_user_names: author 검색용
+        `ALTER TABLE youtube_user_names ADD INDEX idx_author (author)`,
+    ];
+    for (const ddl of indexDefs) {
+        try {
+            await conn.execute(ddl);
+            console.log('[Index]', ddl.substring(0, 60) + '...');
+        } catch (e) {
+            // Duplicate key name = 이미 존재 → 무시
+            if (e.code !== 'ER_DUP_KEYNAME') {
+                console.error('[Index] Failed:', e.message);
+            }
+        }
+    }
+}
+
+function createPool() {
+    pool = mysql.createPool({
         host: DB_HOST,
         user: DB_USER,
         password: DB_PASS,
         database: DB_SCHEMA,
-    }).then(conn => {
-        console.log('DB Connected successfully.');
-        dbConnected = true;
+        waitForConnections: true,
+        connectionLimit: 10,
+        queueLimit: 0,
+        enableKeepAlive: true,
+        keepAliveInitialDelay: 10000,
+    });
+    console.log('DB Pool created.');
+    dbConnected = true;
 
-        // 연결 즉시 버퍼 데이터 flush
+    // 풀 생성 후 인덱스 확인 + 버퍼 flush
+    pool.getConnection().then(async (conn) => {
+        await ensureIndexes(conn);
+        conn.release();
         if (dbBuffer.length > 0) {
-            console.log(`DB reconnected, flushing ${dbBuffer.length} buffered items...`);
+            console.log(`DB pool ready, flushing ${dbBuffer.length} buffered items...`);
             flushDbBuffer();
         }
-
-        conn.on('error', (err) => {
-            console.error('DB Connection Error:', err);
-            if (err.code === 'PROTOCOL_CONNECTION_LOST' || err.code === 'ECONNRESET' || err.fatal) {
-                console.log('DB Connection lost. Clearing cached connection...');
-                dbConnected = false;
-                dbConnectionPromise = null;
-
-                // 기존 연결 객체는 파기 시도
-                if (conn && conn.destroy) {
-                    conn.destroy();
-                }
-            }
-        });
-
-        return conn;
     }).catch(err => {
-        console.error('DB Connection failed. Retrying in 2 seconds...', err.message);
+        console.error('DB initial connection failed:', err.message);
         dbConnected = false;
-        dbConnectionPromise = null; // 실패 시 다시 시도할 수 있도록 무효화
-        return new Promise((resolve, reject) => {
-            setTimeout(() => {
-                // 재시도 시 새 promise를 생성하여 진행
-                createConnectionPromise().then(resolve).catch(reject);
-            }, 2000);
-        });
     });
+
+    return pool;
 }
 
 function connectDB() {
-    if (!dbConnectionPromise) {
-        dbConnectionPromise = createConnectionPromise();
+    if (!pool) {
+        createPool();
     }
-    return dbConnectionPromise;
+    return pool;
+}
+
+async function insertChat(poolOrConn, chatData) {
+    const { sid, channel, authorId, author, authorAlt, thumb, message, msgdata, flag, timestamp } = chatData;
+    const conn = poolOrConn.getConnection ? await poolOrConn.getConnection() : poolOrConn;
+    try {
+        // 1. User UPSERT + cache
+        let userEntry = userCache.get(authorId);
+        if (!userEntry) {
+            await conn.execute(
+                'INSERT IGNORE INTO youtube_users (authorId) VALUES (?)',
+                [authorId]
+            );
+            const [uRows] = await conn.execute(
+                'SELECT uid FROM youtube_users WHERE authorId = ?', [authorId]
+            );
+            userEntry = { uid: uRows[0].uid, profiles: new Map() };
+            userCache.set(authorId, userEntry);
+        }
+
+        // 2. Profile UPSERT (author + thumb 조합으로 이력 관리)
+        const profileKey = author + '\0' + thumb;
+        let nid = userEntry.profiles.get(profileKey);
+        if (!nid) {
+            const [existing] = await conn.execute(
+                'SELECT nid FROM youtube_user_names WHERE uid = ? AND author = ? AND thumb = ?',
+                [userEntry.uid, author, thumb]
+            );
+            if (existing.length > 0) {
+                nid = existing[0].nid;
+            } else {
+                const [ins] = await conn.execute(
+                    'INSERT INTO youtube_user_names (uid, author, authorAlt, thumb, first_seen) VALUES (?, ?, ?, ?, ?)',
+                    [userEntry.uid, author, authorAlt, thumb, timestamp]
+                );
+                nid = ins.insertId;
+            }
+            userEntry.profiles.set(profileKey, nid);
+        }
+
+        // 3. Insert chat
+        await conn.execute(
+            'INSERT INTO youtube_chat3 (sid, channel, nid, message, msgdata, flag, timestamp) VALUES (?, ?, ?, ?, ?, ?, ?)',
+            [sid, channel, nid, message, msgdata, flag, timestamp]
+        );
+    } finally {
+        if (poolOrConn.getConnection) conn.release();
+    }
 }
 
 async function flushDbBuffer() {
@@ -135,14 +199,9 @@ async function flushDbBuffer() {
     console.log(`[Buffer] Flushing ${dbBuffer.length} items...`);
 
     while (dbBuffer.length > 0 && dbConnected) {
-        const item = dbBuffer[0];
+        const chatData = dbBuffer[0];
         try {
-            const conn = await connectDB();
-            await conn.execute(`INSERT INTO youtube_chat2 (
-                sid, channel, author, authorAlt,
-                authorId, authorThumb, message, msgdata,
-                flag, timestamp)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, item.data);
+            await insertChat(connectDB(), chatData);
             dbBuffer.shift();
         } catch (err) {
             if (err && err.code === 'ER_DUP_ENTRY') {
@@ -169,22 +228,15 @@ async function flushDbBuffer() {
     }
 }
 
-async function savedataDB(ids, data) {
+async function savedataDB(chatData) {
     // DB 연결이 끊긴 상태면 버퍼에 저장
     if (!dbConnected) {
-        dbBuffer.push({ ids, data });
+        dbBuffer.push(chatData);
         console.log(`[Buffer] DB offline, buffered (${dbBuffer.length} items)`);
         return;
     }
 
-    connectDB()
-        .then((conn) => {
-            return conn.execute(`INSERT INTO youtube_chat2 (
-                sid, channel, author, authorAlt,
-                authorId, authorThumb, message, msgdata,
-                flag, timestamp)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, data);
-        })
+    insertChat(connectDB(), chatData)
         .catch((err) => {
             if (err && err.code === 'ER_DUP_ENTRY') return;
 
@@ -193,9 +245,9 @@ async function savedataDB(ids, data) {
             // 연결 에러면 상태 변경 후 버퍼에 저장
             if (isConnectionError(err)) {
                 dbConnected = false;
-                dbConnectionPromise = null;
+                pool = null;
             }
-            dbBuffer.push({ ids, data });
+            dbBuffer.push(chatData);
             console.log(`[Buffer] Buffered (${dbBuffer.length} items)`);
         });
 }
@@ -251,21 +303,25 @@ async function createLive(id, reset) {
         yt[id].error = 0;
         yt[id].msgerr = 0;
         const jstr = JSON.stringify(chatItem);
-        const hash = crypto.createHash("sha256").update(jstr).digest("hex");
+        const sid = crypto.createHash("sha256").update(jstr).digest("hex").substring(0, 32);
         const message = { m: chatItem.message, s: chatItem.superchat };
         if (!chatItem.superchat)
             delete message.s;
-        savedataDB(randomString(50), [
-            hash, id,
-            NVL(chatItem.author?.name),
-            NVL(chatItem.author?.thumbnail?.alt),
-            NVL(chatItem.author?.channelId),
-            NVL(chatItem.author?.thumbnail?.url),
-            Buffer.from(LZString.compressToUTF16(JSON.stringify(message)), 'utf16le'),
-            tokMessage((chatItem.message || []).map(e => e.text).join(' ')),
-            youtube_flag(chatItem),
-            NVL(chatItem.timestamp)
-        ]);
+
+        const ts = chatItem.timestamp ? new Date(chatItem.timestamp) : new Date();
+
+        savedataDB({
+            sid,
+            channel: id,
+            authorId: NVL(chatItem.author?.channelId),
+            author: NVL(chatItem.author?.name),
+            authorAlt: NVL(chatItem.author?.thumbnail?.alt),
+            thumb: NVL(chatItem.author?.thumbnail?.url),
+            message: zlib.deflateRawSync(Buffer.from(JSON.stringify(message), 'utf8')),
+            msgdata: tokMessage((chatItem.message || []).map(e => e.text).join(' ')),
+            flag: youtube_flag(chatItem),
+            timestamp: ts
+        });
     });
 
     liveChat.on("error", (err) => {
@@ -362,52 +418,86 @@ async function queryChat(req, res, direction) {
     let filters = [];
     try { filters = JSON.parse(req.query.filters || "[]"); } catch (e) { filters = []; }
 
-    const conditions = [];
-    const params = [];
+    // Phase 1: ID만 뽑는 서브쿼리 조건 (가벼운 인덱스 스캔)
+    const idConditions = [];
+    const idParams = [];
+    // Phase 2: JOIN이 필요한 필터 (author, userId)
+    let needUserJoin = false;
+    let needNameJoin = false;
+    const joinConditions = [];
+    const joinParams = [];
 
-    conditions.push(isDown ? "id < ?" : "id >= ?");
-    params.push(start);
+    idConditions.push(isDown ? "c.id < ?" : "c.id >= ?");
+    idParams.push(start);
 
     for (const f of filters) {
         switch (f.type) {
             case "channel":
-                conditions.push("channel = ?");
-                params.push(f.value);
+                idConditions.push("c.channel = ?");
+                idParams.push(f.value);
                 break;
             case "text":
-                conditions.push("MATCH(msgdata) AGAINST(? IN BOOLEAN MODE)");
-                params.push(searchTokMessage(f.value));
+                idConditions.push("MATCH(c.msgdata) AGAINST(? IN BOOLEAN MODE)");
+                idParams.push(searchTokMessage(f.value));
                 break;
             case "author":
-                conditions.push("(author = ? OR authorAlt = ?)");
-                params.push(f.value, f.value);
+                // author는 youtube_user_names에 있으므로 서브쿼리로 nid를 먼저 찾음
+                idConditions.push("c.nid IN (SELECT nid FROM youtube_user_names WHERE author = ? OR authorAlt = ?)");
+                idParams.push(f.value, f.value);
                 break;
             case "userId":
-                conditions.push("authorId = ?");
-                params.push(f.value);
+                // userId는 youtube_users → youtube_user_names 경유
+                idConditions.push("c.nid IN (SELECT n2.nid FROM youtube_user_names n2 JOIN youtube_users u2 ON n2.uid = u2.uid WHERE u2.authorId = ?)");
+                idParams.push(f.value);
                 break;
             case "superchat":
-                conditions.push("(flag & 16) != 0");
+                idConditions.push("(c.flag & 16) != 0");
                 break;
         }
     }
 
-    const where = conditions.join(" AND ");
     const order = isDown ? "DESC" : "ASC";
-    const sql = `SELECT id, channel, author, authorAlt, authorId,
-                        authorThumb, message, flag, timestamp
-                 FROM youtube_chat2
-                 WHERE ${where}
-                 ORDER BY id ${order}
-                 LIMIT 100`;
 
+    // 2단계 쿼리: 먼저 ID만 빠르게 뽑고, 그 ID로 JOIN해서 상세 데이터 가져옴
+    const idWhere = idConditions.join(" AND ");
+    const sql = `SELECT c.id, c.channel, n.author, n.authorAlt, u.authorId,
+                        n.thumb AS authorThumb, c.message, c.flag, c.timestamp
+                 FROM youtube_chat3 c
+                 JOIN youtube_user_names n ON c.nid = n.nid
+                 JOIN youtube_users u ON n.uid = u.uid
+                 WHERE c.id IN (
+                     SELECT sub.id FROM (
+                         SELECT c.id FROM youtube_chat3 c
+                         WHERE ${idWhere}
+                         ORDER BY c.id ${order}
+                         LIMIT 100
+                     ) sub
+                 )
+                 ORDER BY c.id ${order}`;
+
+    let conn;
     try {
-        const conn = await connectDB();
-        const [rows] = await conn.execute(sql, params);
-        res.json(rows);
+        conn = await connectDB().getConnection();
+        // 쿼리 타임아웃 10초
+        await conn.execute('SET SESSION MAX_EXECUTION_TIME=10000');
+        const [rows] = await conn.execute(sql, idParams);
+        const result = rows.map(row => ({
+            id: row.id,
+            channel: row.channel,
+            author: row.author,
+            authorAlt: row.authorAlt,
+            authorId: row.authorId,
+            authorThumb: row.authorThumb,
+            message: row.message ? row.message.toString('base64') : null,
+            flag: row.flag,
+            timestamp: row.timestamp
+        }));
+        res.json(result);
     } catch (err) {
         console.error("Query error:", err.message);
         res.json([]);
+    } finally {
+        if (conn) conn.release();
     }
 }
 
@@ -427,7 +517,8 @@ app.listen(PORT, () => {
     setInterval(() => {
         if (!dbConnected && dbBuffer.length > 0) {
             console.log(`[Buffer] Attempting DB reconnect (${dbBuffer.length} items buffered)...`);
-            connectDB(); // 성공 시 createConnectionPromise에서 flushDbBuffer 호출
+            pool = null;
+            connectDB(); // 풀 재생성 시 자동으로 flushDbBuffer 호출
         }
     }, 5000);
 })();

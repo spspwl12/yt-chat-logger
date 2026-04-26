@@ -23,8 +23,13 @@
         }
 
         @media (max-width: 600px) {
-            body { zoom: 150%; }
-            .chat-header h3 { display: none; }
+            body {
+                zoom: 150%;
+            }
+
+            .chat-header h3 {
+                display: none;
+            }
         }
 
         #main-logo {
@@ -99,15 +104,41 @@
         }
 
         @keyframes chipIn {
-            from { transform: scale(0.8); opacity: 0; }
-            to { transform: scale(1); opacity: 1; }
+            from {
+                transform: scale(0.8);
+                opacity: 0;
+            }
+
+            to {
+                transform: scale(1);
+                opacity: 1;
+            }
         }
 
-        .chip.channel { background: #1a3a5c; color: #7cb8ff; }
-        .chip.text { background: #2a2a2a; color: #ccc; }
-        .chip.author { background: #1a3c1a; color: #7cff7c; }
-        .chip.userId { background: #3c2a1a; color: #ffb87c; }
-        .chip.superchat { background: #3c3a1a; color: #ffe07c; }
+        .chip.channel {
+            background: #1a3a5c;
+            color: #7cb8ff;
+        }
+
+        .chip.text {
+            background: #2a2a2a;
+            color: #ccc;
+        }
+
+        .chip.author {
+            background: #1a3c1a;
+            color: #7cff7c;
+        }
+
+        .chip.userId {
+            background: #3c2a1a;
+            color: #ffb87c;
+        }
+
+        .chip.superchat {
+            background: #3c3a1a;
+            color: #ffe07c;
+        }
 
         .chip-remove {
             cursor: pointer;
@@ -117,7 +148,9 @@
             transition: opacity 0.2s;
         }
 
-        .chip-remove:hover { opacity: 1; }
+        .chip-remove:hover {
+            opacity: 1;
+        }
 
         .chip-type-select {
             padding: 4px 6px;
@@ -131,7 +164,9 @@
             flex-shrink: 0;
         }
 
-        .chip-type-select:focus { border-color: #3ea6ff; }
+        .chip-type-select:focus {
+            border-color: #3ea6ff;
+        }
 
         .chip-input {
             flex: 1;
@@ -144,7 +179,9 @@
             outline: none;
         }
 
-        .chip-input::placeholder { color: #717171; }
+        .chip-input::placeholder {
+            color: #717171;
+        }
 
         .search-input {
             width: 80%;
@@ -342,7 +379,8 @@
             gap: 8px
         }
     </style>
-    <script src="https://cdn.jsdelivr.net/npm/lz-string/libs/lz-string.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/pako@2/dist/pako.min.js"></script>
+
 </head>
 
 <body>
@@ -481,9 +519,17 @@
             ));
         }
 
+        function decodeMessage(b64) {
+            if (!b64) return {};
+            try {
+                const bin = Uint8Array.from(atob(b64), c => c.charCodeAt(0));
+                const raw = pako.inflateRaw(bin, { to: 'string' });
+                return JSON.parse(raw);
+            } catch (e) { return {}; }
+        }
+
         function render(element) {
-            const buffer = LZString.decompressFromUTF16(bufferToUTF16LE(element.message.data));
-            const message = buffer.length > 1 ? JSON.parse(buffer) : {};
+            const message = decodeMessage(element.message);
             const d = document.createElement('div');
             d.className = 'message';
             d.setAttribute("data-id", element.id);
@@ -539,14 +585,7 @@
             const s = String(now.getSeconds()).padStart(2, '0');
             return `${y}-${m}-${d} ${h}:${min}:${s}`;
         }
-        function bufferToUTF16LE(buf) {
-            let result = "";
-            for (let i = 0; i < buf.length; i += 2) {
-                const code = buf[i] | (buf[i + 1] << 8);
-                result += String.fromCharCode(code);
-            }
-            return result;
-        }
+
         function showLoading() {
             const d = document.createElement('div');
             d.className = 'loading';
