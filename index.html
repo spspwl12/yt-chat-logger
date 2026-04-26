@@ -62,6 +62,84 @@
             flex-wrap: wrap;
         }
 
+        .chip-input-area {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            gap: 6px;
+            flex: 1;
+            min-width: 0;
+            padding: 4px 8px;
+            background: #121212;
+            border: 1px solid #303030;
+            border-radius: 20px;
+            cursor: text;
+            transition: border .2s;
+        }
+
+        .chip-input-area:focus-within {
+            border-color: #3ea6ff;
+        }
+
+        .chip {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            padding: 2px 10px;
+            border-radius: 12px;
+            font-size: 12px;
+            white-space: nowrap;
+            animation: chipIn 0.2s ease;
+        }
+
+        @keyframes chipIn {
+            from { transform: scale(0.8); opacity: 0; }
+            to { transform: scale(1); opacity: 1; }
+        }
+
+        .chip.channel { background: #1a3a5c; color: #7cb8ff; }
+        .chip.text { background: #2a2a2a; color: #ccc; }
+        .chip.author { background: #1a3c1a; color: #7cff7c; }
+        .chip.userId { background: #3c2a1a; color: #ffb87c; }
+        .chip.superchat { background: #3c3a1a; color: #ffe07c; }
+
+        .chip-remove {
+            cursor: pointer;
+            font-size: 14px;
+            line-height: 1;
+            opacity: 0.6;
+            transition: opacity 0.2s;
+        }
+
+        .chip-remove:hover { opacity: 1; }
+
+        .chip-type-select {
+            padding: 4px 6px;
+            background: #1e1e1e;
+            border: 1px solid #404040;
+            border-radius: 10px;
+            color: #aaa;
+            font-size: 11px;
+            outline: none;
+            cursor: pointer;
+            flex-shrink: 0;
+        }
+
+        .chip-type-select:focus { border-color: #3ea6ff; }
+
+        .chip-input {
+            flex: 1;
+            min-width: 80px;
+            padding: 4px 0;
+            background: transparent;
+            border: none;
+            color: #fff;
+            font-size: 13px;
+            outline: none;
+        }
+
+        .chip-input::placeholder { color: #717171; }
+
         .search-input {
             width: 80%;
             flex: 1;
@@ -269,8 +347,16 @@
             </svg>
             <h3>채팅 로그</h3>
             <div class="search-container">
-                <input type="text" class="search-input" id="channelID" placeholder="방 아이디" value="">
-                <input type="text" class="search-input" id="searchInput" placeholder="채팅 검색..." value="">
+                <div class="chip-input-area" id="chipInputArea">
+                    <select id="chipTypeSelect" class="chip-type-select">
+                        <option value="text">검색</option>
+                        <option value="channel">채널</option>
+                        <option value="userId">유저ID</option>
+                        <option value="author">작성자</option>
+                        <option value="superchat">슈퍼챗</option>
+                    </select>
+                    <input type="text" class="chip-input" id="chipInput" placeholder="검색어 입력 후 Enter">
+                </div>
             </div>
         </div>
         <div class="chat-messages" id="chatMessages"></div>
@@ -279,14 +365,116 @@
         const mainLogo = document.getElementById('main-logo');
         const chatMessages = document.getElementById('chatMessages');
         const chatContainer = document.getElementById('chatContainer');
-        const channelID = document.getElementById('channelID');
-        const searchInput = document.getElementById('searchInput');
-        let loading = false
-        let hasMoreD = true
-        let hasMoreU = true
-        let timer = null
-        let firstID = 0
+        const chipInputArea = document.getElementById('chipInputArea');
+        const chipInput = document.getElementById('chipInput');
+        const chipTypeSelect = document.getElementById('chipTypeSelect');
+
+        const CHIP_LABELS = {
+            text: '검색', channel: '채널', userId: '유저',
+            author: '작성자', superchat: '슈퍼챗'
+        };
+        const CHIP_PLACEHOLDERS = {
+            text: '검색어 입력 후 Enter',
+            channel: '채널 ID 입력 후 Enter',
+            userId: '유저 ID 입력 후 Enter',
+            author: '작성자 이름 입력 후 Enter',
+            superchat: ''
+        };
+        let loading = false;
+        let hasMoreD = true;
+        let hasMoreU = true;
+        let timer = null;
+        let firstID = 0;
         let lastID = 999999999999999;
+        let chips = [];
+
+        function makeChip(type, value) {
+            if (type === 'superchat')
+                return { type: 'superchat', value: '', label: '슈퍼챗' };
+            if (!value) return null;
+            const label = (CHIP_LABELS[type] || type) + ': ' + value;
+            return { type, value, label };
+        }
+
+        function parseChipFromText(text) {
+            const t = text.trim();
+            if (!t) return null;
+            if (/^(ch|channel):/.test(t)) return makeChip('channel', t.replace(/^(ch|channel):/, ''));
+            if (t.startsWith('@') || t.startsWith('user:')) return makeChip('userId', t.replace(/^(@|user:)/, ''));
+            if (t.startsWith('author:')) return makeChip('author', t.replace(/^author:/, ''));
+            if (t === 'superchat' || t === 'sc') return makeChip('superchat', '');
+            return null;
+        }
+
+        function addChipBySelect(value, skipLoad) {
+            const type = chipTypeSelect.value;
+            const chip = makeChip(type, value);
+            if (!chip) return;
+            if (chips.some(c => c.type === chip.type && c.value === chip.value)) return;
+            chips.push(chip);
+            renderChips();
+            saveChips();
+            if (!skipLoad) load(true, 0, "down");
+        }
+
+        function addChip(text, skipLoad) {
+            const parsed = parseChipFromText(text);
+            if (parsed) {
+                if (chips.some(c => c.type === parsed.type && c.value === parsed.value)) return;
+                chips.push(parsed);
+            } else {
+                const chip = makeChip('text', text.trim());
+                if (!chip) return;
+                if (chips.some(c => c.type === chip.type && c.value === chip.value)) return;
+                chips.push(chip);
+            }
+            renderChips();
+            saveChips();
+            if (!skipLoad) load(true, 0, "down");
+        }
+
+        function removeChip(index) {
+            chips.splice(index, 1);
+            renderChips();
+            saveChips();
+            load(true, 0, "down");
+        }
+
+        function clearChips(skipLoad) {
+            chips = [];
+            renderChips();
+            saveChips();
+            if (!skipLoad) load(true, 0, "down");
+        }
+
+        function renderChips() {
+            chipInputArea.querySelectorAll('.chip').forEach(el => el.remove());
+            chips.forEach((chip, i) => {
+                const el = document.createElement('span');
+                el.className = 'chip ' + chip.type;
+                el.innerHTML = chip.label + '<span class="chip-remove" data-index="' + i + '">&times;</span>';
+                chipInputArea.insertBefore(el, chipInput);
+            });
+            adjustContentMargin();
+        }
+
+        function saveChips() {
+            localStorage.setItem('chatChips', JSON.stringify(chips));
+        }
+
+        function loadSavedChips() {
+            try {
+                const saved = localStorage.getItem('chatChips');
+                if (saved) { chips = JSON.parse(saved); renderChips(); }
+            } catch (e) { chips = []; }
+        }
+
+        function getFiltersParam() {
+            return encodeURIComponent(JSON.stringify(
+                chips.map(c => ({ type: c.type, value: c.value }))
+            ));
+        }
+
         function render(element) {
             const buffer = LZString.decompressFromUTF16(bufferToUTF16LE(element.message.data));
             const message = buffer.length > 1 ? JSON.parse(buffer) : {};
@@ -313,30 +501,25 @@
             const e2 = d.getElementsByClassName("message-text")[0];
             e2.addEventListener('dblclick', function (e) {
                 e.preventDefault();
-                channelID.value = findParentDataId(e.target, "data-channel");
-                searchInput.value = "";
+                const channel = findParentDataId(e.target, "data-channel");
                 const targetID = parseInt(findParentDataId(e.target, "data-id"));
+                clearChips(true);
+                addChip('ch:' + channel, true);
                 load(true, targetID, "up|down").then(() => {
-                    const e = document.querySelector(`[data-id='${targetID}']`);
-                    if (e) {
-                        e.classList.add("highlight");
-                        setTimeout(() => {
-                            e.classList.remove("highlight");
-                        }, 500);
-                        e.scrollIntoView({
-                            behavior: "auto",
-                            block: "center"
-                        });
+                    const el = document.querySelector(`[data-id='${targetID}']`);
+                    if (el) {
+                        el.classList.add("highlight");
+                        setTimeout(() => el.classList.remove("highlight"), 500);
+                        el.scrollIntoView({ behavior: "auto", block: "center" });
                     }
                 });
             });
             const e3 = d.getElementsByClassName("username")[0];
             e3.addEventListener('dblclick', function (e) {
                 e.preventDefault();
-                searchInput.value = e.target.getAttribute("data-user");
-                load(true, 0, "down");
+                addChip('@' + e.target.getAttribute("data-user"));
             });
-            return d
+            return d;
         }
         function setScrollPos(pos) {
             document.documentElement.scrollTop = pos;
@@ -353,7 +536,7 @@
         function bufferToUTF16LE(buf) {
             let result = "";
             for (let i = 0; i < buf.length; i += 2) {
-                const code = buf[i] | (buf[i + 1] << 8); // LE: low + high
+                const code = buf[i] | (buf[i + 1] << 8);
                 result += String.fromCharCode(code);
             }
             return result;
@@ -363,11 +546,11 @@
             d.className = 'loading';
             d.id = 'loader';
             d.innerHTML = '<div class="spinner"></div> 로딩중...';
-            chatMessages.appendChild(d)
+            chatMessages.appendChild(d);
         }
         function hideLoading() {
             const l = document.getElementById('loader');
-            l && l.remove()
+            l && l.remove();
         }
         function showEnd() {
             const d = document.createElement('div');
@@ -385,34 +568,24 @@
         }
         async function load(reset = false, targetID = 0, dir = "down") {
             if (!reset) {
-                if (!hasMoreD && dir.includes("down"))
-                    return;
-                if (!hasMoreU && dir.includes("up"))
-                    return;
+                if (!hasMoreD && dir.includes("down")) return;
+                if (!hasMoreU && dir.includes("up")) return;
             }
-
             if (reset) {
                 hasMoreD = hasMoreU = true;
                 firstID = 0;
                 lastID = 999999999999999;
-                if (timer) {
-                    timer = null;
-                    clearInterval(timer);
-                }
+                if (timer) { clearTimeout(timer); timer = null; }
                 chatMessages.innerHTML = '';
                 setScrollPos(0);
-                if (targetID > 0)
-                    lastID = firstID = targetID;
+                if (targetID > 0) lastID = firstID = targetID;
             }
-            localStorage.setItem("channelID.value", channelID.value);
-            localStorage.setItem("searchInput.value", searchInput.value);
+            const filtersParam = getFiltersParam();
             const getContents = async (a, b) => {
                 showLoading();
                 try {
                     const res = await fetch(
-                        `/${a}?channel=${encodeURIComponent(channelID.value.trim())}` +
-                        `&search=${encodeURIComponent(searchInput.value.trim())}` +
-                        `&start=${b}`
+                        `/${a}?filters=${filtersParam}&start=${b}`
                     );
                     const json = await res.json();
                     hideLoading();
@@ -420,21 +593,19 @@
                         if (a === "data") {
                             json.forEach(m => chatMessages.appendChild(render(m)));
                             const l_id = json[json.length - 1].id;
-                            if (l_id < lastID)
-                                lastID = l_id;
+                            if (l_id < lastID) lastID = l_id;
                         }
                         else if (a === "udata") {
                             const scrollHeight = document.documentElement.scrollHeight;
                             json.forEach(m => chatMessages.prepend(render(m)));
                             setScrollPos(document.documentElement.scrollHeight - scrollHeight);
-                            const f_id = json[json.length - 1].id;
-                            if (firstID < f_id)
-                                firstID = f_id;
-                            firstID++;
+                            const f_id = json[0].id;
+                            if (firstID === 0 || f_id < firstID) firstID = f_id;
+                            const l_id = json[json.length - 1].id;
+                            if (l_id >= firstID) firstID = l_id + 1;
                         }
                     } else {
-                        if (dir.includes("up"))
-                            hasMoreU = false;
+                        if (dir.includes("up")) hasMoreU = false;
                         if (dir.includes("down")) {
                             hasMoreD = false;
                             lastID === 999999999999999 ? showEmpty() : showEnd();
@@ -442,43 +613,27 @@
                     }
                 } catch (e) {
                     hideLoading();
-                    console.error(e)
+                    console.error(e);
                     return false;
                 }
-
                 return true;
             };
             loading = true;
-            if (dir.includes("up"))
-                await getContents("udata", firstID);
-            if (dir.includes("down"))
-                await getContents("data", lastID);
+            if (dir.includes("up")) await getContents("udata", firstID);
+            if (dir.includes("down")) await getContents("data", lastID);
             loading = false;
         }
         function onScroll() {
             const { scrollTop, scrollHeight, clientHeight } = document.documentElement;
             const bottom = scrollHeight - scrollTop - clientHeight;
-            if (loading)
-                return;
-            if (bottom < 200 && hasMoreD)
-                load(false, 0, "down");
-            else if (scrollTop < 100 && hasMoreU && firstID > 0) {
-                load(false, 0, "up");
-            }
-        }
-        function onSearch(e) {
-            clearTimeout(timer);
-            timer = setTimeout(() => {
-                timer = null;
-                load(true, 0, "down");
-            }, 1000)
+            if (loading) return;
+            if (bottom < 200 && hasMoreD) load(false, 0, "down");
+            else if (scrollTop < 100 && hasMoreU && firstID > 0) load(false, 0, "up");
         }
         function findParentDataId(element, attr) {
             let current = element.parentNode;
             while (current && current.nodeType === 1) {
-                if (current.hasAttribute(attr)) {
-                    return current.getAttribute(attr);
-                }
+                if (current.hasAttribute(attr)) return current.getAttribute(attr);
                 current = current.parentNode;
             }
             return null;
@@ -488,17 +643,50 @@
             const content = document.querySelector('.chat-messages');
             content.style.paddingTop = (header.offsetHeight + 20) + 'px';
         }
-        channelID.value = localStorage.getItem("channelID.value");
-        searchInput.value = localStorage.getItem("searchInput.value");
+
+        // chip 클릭 이벤트 (삭제 버튼)
+        chipInputArea.addEventListener('click', (e) => {
+            if (e.target.classList.contains('chip-remove')) {
+                removeChip(parseInt(e.target.getAttribute('data-index')));
+            }
+            if (e.target !== chipTypeSelect) {
+                chipInput.focus();
+            }
+        });
+
+        // 콤보박스 변경 이벤트
+        chipTypeSelect.addEventListener('change', () => {
+            const type = chipTypeSelect.value;
+            chipInput.placeholder = CHIP_PLACEHOLDERS[type] || '';
+            if (type === 'superchat') {
+                addChipBySelect('', false);
+                chipTypeSelect.value = 'text';
+                chipInput.placeholder = CHIP_PLACEHOLDERS['text'];
+            } else {
+                chipInput.focus();
+            }
+        });
+
+        // chip 입력 이벤트
+        chipInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' && chipInput.value.trim()) {
+                e.preventDefault();
+                addChipBySelect(chipInput.value.trim());
+                chipInput.value = '';
+            }
+            if (e.key === 'Backspace' && !chipInput.value && chips.length > 0) {
+                removeChip(chips.length - 1);
+            }
+        });
+
+        // 초기화
+        loadSavedChips();
         window.addEventListener('scroll', onScroll);
         window.addEventListener('resize', adjustContentMargin);
         mainLogo.addEventListener('mousedown', (e) => {
             e.preventDefault();
-            channelID.value = searchInput.value = '';
-            load(true, 0, "down");
+            clearChips();
         });
-        channelID.addEventListener('input', onSearch);
-        searchInput.addEventListener('input', onSearch);
         load(false, 0, "down");
         adjustContentMargin();
     </script>
