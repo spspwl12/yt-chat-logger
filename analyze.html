@@ -1,0 +1,487 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Stylometry Analysis</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+
+        :root {
+            --bg: #000000;
+            --bg-card: #0a0a0a;
+            --border: #27272a;
+            --text-main: #f4f4f5;
+            --text-muted: #a1a1aa;
+            --primary: #3b82f6;
+            --primary-hover: #2563eb;
+            --accent: #8b5cf6;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            background-color: var(--bg);
+            color: var(--text-main);
+            line-height: 1.5;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* Header */
+        header {
+            border-bottom: 1px solid var(--border);
+            background: rgba(0, 0, 0, 0.8);
+            backdrop-filter: blur(12px);
+            position: sticky;
+            top: 0;
+            z-index: 100;
+            padding: 16px 32px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .logo {
+            font-size: 18px;
+            font-weight: 700;
+            letter-spacing: -0.5px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .logo-icon {
+            width: 24px;
+            height: 24px;
+            background: linear-gradient(135deg, var(--primary), var(--accent));
+            border-radius: 6px;
+        }
+
+        .status-badge {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 13px;
+            font-weight: 500;
+            color: var(--text-muted);
+            background: var(--bg-card);
+            padding: 6px 14px;
+            border-radius: 20px;
+            border: 1px solid var(--border);
+        }
+
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background-color: #ef4444;
+        }
+        .status-dot.online { background-color: #22c55e; box-shadow: 0 0 10px rgba(34, 197, 94, 0.4); }
+        .status-dot.busy { background-color: #eab308; box-shadow: 0 0 10px rgba(234, 179, 8, 0.4); }
+
+        /* Main Container */
+        main {
+            flex: 1;
+            width: 100%;
+            max-width: 900px;
+            margin: 0 auto;
+            padding: 40px 24px;
+            display: flex;
+            flex-direction: column;
+            gap: 24px;
+        }
+
+        /* Search Section */
+        .search-container {
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+            background: var(--bg-card);
+            padding: 32px;
+            border-radius: 16px;
+            border: 1px solid var(--border);
+        }
+
+        h1 {
+            font-size: 24px;
+            font-weight: 600;
+            letter-spacing: -0.5px;
+        }
+
+        .search-box {
+            display: flex;
+            gap: 12px;
+        }
+
+        input[type="text"] {
+            flex: 1;
+            background: var(--bg);
+            border: 1px solid var(--border);
+            color: var(--text-main);
+            padding: 14px 16px;
+            border-radius: 8px;
+            font-size: 15px;
+            font-family: inherit;
+            outline: none;
+            transition: border-color 0.2s;
+            min-width: 0; /* Prevents input from blowing out flex container */
+        }
+
+        input[type="text"]:focus {
+            border-color: var(--primary);
+        }
+
+        button {
+            background: var(--primary);
+            color: white;
+            border: none;
+            padding: 0 24px;
+            border-radius: 8px;
+            font-size: 15px;
+            font-weight: 600;
+            font-family: inherit;
+            cursor: pointer;
+            transition: background 0.2s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            white-space: nowrap;
+        }
+
+        button:hover {
+            background: var(--primary-hover);
+        }
+
+        .refresh-btn {
+            background: transparent;
+            border: 1px solid var(--border);
+            color: var(--text-main);
+            font-size: 13px;
+            padding: 6px 14px;
+            border-radius: 6px;
+        }
+        .refresh-btn:hover {
+            background: var(--border);
+        }
+
+        /* Target Info */
+        .target-info {
+            display: none;
+            justify-content: space-between;
+            align-items: center;
+            padding: 24px;
+            background: rgba(59, 130, 246, 0.05);
+            border: 1px solid rgba(59, 130, 246, 0.2);
+            border-radius: 12px;
+            word-break: break-word;
+        }
+
+        .target-name {
+            font-size: 20px;
+            font-weight: 600;
+        }
+
+        .target-meta {
+            color: var(--primary);
+            font-size: 14px;
+            margin-top: 4px;
+        }
+
+        /* Results List */
+        .results-list {
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+        }
+
+        .result-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 24px;
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+            transition: transform 0.2s, border-color 0.2s;
+        }
+
+        .result-card:hover {
+            border-color: #444;
+            transform: translateY(-2px);
+        }
+
+        .card-top {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            gap: 20px;
+        }
+
+        .user-info {
+            flex: 1;
+            min-width: 0; /* Important for text truncation/wrapping inside flex */
+        }
+
+        .user-info h3 {
+            font-size: 18px;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+
+        .user-id {
+            font-size: 13px;
+            color: var(--text-muted);
+            font-family: monospace;
+            margin-top: 6px;
+            word-break: break-all;
+        }
+
+        .match-score {
+            display: flex;
+            flex-direction: column;
+            align-items: flex-end;
+            flex-shrink: 0;
+        }
+
+        .score-value {
+            font-size: 24px;
+            font-weight: 700;
+            color: var(--text-main);
+        }
+
+        .score-label {
+            font-size: 12px;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .keywords {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            padding-top: 16px;
+            border-top: 1px dashed var(--border);
+        }
+
+        .keyword-tag {
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid var(--border);
+            padding: 6px 12px;
+            border-radius: 6px;
+            font-size: 13px;
+            color: #d4d4d8;
+            white-space: nowrap; /* Prevent breaking inside the tag */
+        }
+
+        .rank-badge {
+            font-size: 12px;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-weight: 600;
+            flex-shrink: 0;
+        }
+        .rank-1 { background: rgba(239, 68, 68, 0.15); color: #ef4444; border: 1px solid rgba(239, 68, 68, 0.3); }
+        .rank-2 { background: rgba(249, 115, 22, 0.15); color: #f97316; border: 1px solid rgba(249, 115, 22, 0.3); }
+        .rank-3 { background: rgba(234, 179, 8, 0.15); color: #eab308; border: 1px solid rgba(234, 179, 8, 0.3); }
+        .rank-other { background: var(--border); color: var(--text-muted); border: 1px solid transparent; }
+
+        .loading-state {
+            display: none;
+            text-align: center;
+            padding: 40px;
+            color: var(--text-muted);
+        }
+
+        .spinner {
+            width: 24px;
+            height: 24px;
+            border: 3px solid var(--border);
+            border-top-color: var(--primary);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 16px auto;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        @media (max-width: 600px) {
+            .search-box { flex-direction: column; }
+            button { padding: 14px; }
+            .card-top { flex-direction: column; gap: 12px; }
+            .match-score { align-items: flex-start; }
+            header { padding: 16px 20px; }
+            main { padding: 20px 16px; }
+        }
+    </style>
+</head>
+<body>
+
+    <header>
+        <div class="logo">
+            <div class="logo-icon"></div>
+            Stylometry Matrix
+        </div>
+        <div class="status-badge" id="statusBadge">
+            <div class="status-dot" id="dot"></div>
+            <span id="statusText">Connecting...</span>
+        </div>
+    </header>
+
+    <main>
+        <div class="search-container">
+            <h1>Find Alt-Accounts</h1>
+            <p style="color: var(--text-muted); font-size: 14px; margin-top: -8px;">Enter an author ID to find users with similar chatting patterns.</p>
+            <div class="search-box">
+                <input type="text" id="targetInput" placeholder="Enter target authorId (e.g. UC123...)" onkeypress="if(event.key === 'Enter') analyze()">
+                <button onclick="analyze()">Deep Scan</button>
+            </div>
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 8px;">
+                <span id="cacheInfo" style="font-size: 13px; color: var(--text-muted);">Cache: --</span>
+                <button class="refresh-btn" onclick="refreshCache()">Force Cache Rebuild</button>
+            </div>
+        </div>
+
+        <div class="target-info" id="targetDash">
+            <div>
+                <div class="target-name" id="tgtName">Target Name</div>
+                <div class="target-meta" id="tgtMeta">ID: -- | Analyzed: 0 msgs</div>
+            </div>
+            <div style="text-align: right; color: var(--text-muted); font-size: 13px; flex-shrink: 0;">
+                Compute Time<br>
+                <strong style="color: var(--text-main); font-size: 16px;" id="tgtTime">0.00s</strong>
+            </div>
+        </div>
+
+        <div class="loading-state" id="loading">
+            <div class="spinner"></div>
+            <div>Analyzing vectors and computing similarities...</div>
+        </div>
+
+        <div class="results-list" id="resultGrid">
+            <!-- Results will be injected here -->
+        </div>
+    </main>
+
+    <script>
+        async function checkStatus() {
+            try {
+                const res = await fetch('/api/status');
+                const data = await res.json();
+                const text = document.getElementById('statusText');
+                const dot = document.getElementById('dot');
+                const cacheInfo = document.getElementById('cacheInfo');
+
+                if (data.isAnalyzing) {
+                    text.textContent = 'Building Cache';
+                    dot.className = 'status-dot busy';
+                    cacheInfo.textContent = data.progress || 'Processing database...';
+                } else if (data.isReady) {
+                    text.textContent = 'System Ready';
+                    dot.className = 'status-dot online';
+                    cacheInfo.textContent = `Indexed Vectors: ${data.totalUsers.toLocaleString()} users`;
+                } else {
+                    text.textContent = 'Offline';
+                    dot.className = 'status-dot';
+                    cacheInfo.textContent = 'No cache available';
+                }
+            } catch (e) {
+                document.getElementById('statusText').textContent = 'Error';
+                document.getElementById('dot').className = 'status-dot';
+            }
+        }
+
+        async function refreshCache() {
+            if(!confirm("Warning: Rebuilding cache takes heavy computation. Proceed?")) return;
+            try {
+                const res = await fetch('/api/refresh', { method: 'POST' });
+                alert((await res.json()).message || 'Started');
+                checkStatus();
+            } catch(e) {}
+        }
+
+        async function analyze() {
+            const target = document.getElementById('targetInput').value.trim();
+            if (!target) return;
+
+            const loading = document.getElementById('loading');
+            const targetDash = document.getElementById('targetDash');
+            const grid = document.getElementById('resultGrid');
+
+            loading.style.display = 'block';
+            targetDash.style.display = 'none';
+            grid.innerHTML = '';
+
+            try {
+                const startT = performance.now();
+                const res = await fetch(`/api/analyze?target=${encodeURIComponent(target)}`);
+                const data = await res.json();
+                const endT = performance.now();
+
+                if (!res.ok) throw new Error(data.error);
+
+                document.getElementById('tgtName').textContent = data.target.authorName || 'Unknown User';
+                document.getElementById('tgtMeta').textContent = `ID: ${data.target.authorId} | Analyzed Logs: ${data.target.msgCount}`;
+                document.getElementById('tgtTime').textContent = ((endT - startT) / 1000).toFixed(3) + 's';
+
+                if(data.results.length === 0) {
+                    grid.innerHTML = '<div style="text-align:center; padding: 40px; color: var(--text-muted); border: 1px dashed var(--border); border-radius: 12px;">No high-confidence matches found.</div>';
+                } else {
+                    data.results.forEach((r, idx) => {
+                        const simPct = (r.similarity * 100).toFixed(1);
+                        
+                        let rankClass = 'rank-other';
+                        if (idx === 0) rankClass = 'rank-1';
+                        else if (idx === 1) rankClass = 'rank-2';
+                        else if (idx === 2) rankClass = 'rank-3';
+
+                        const card = document.createElement('div');
+                        card.className = 'result-card';
+                        card.innerHTML = `
+                            <div class="card-top">
+                                <div class="user-info">
+                                    <h3>
+                                        <span class="rank-badge ${rankClass}">#${idx + 1}</span>
+                                        ${r.authorName || 'Unknown User'}
+                                    </h3>
+                                    <div class="user-id">${r.authorId} &middot; ${r.msgCount} msgs</div>
+                                </div>
+                                <div class="match-score">
+                                    <div class="score-value">${simPct}%</div>
+                                    <div class="score-label">Similarity</div>
+                                </div>
+                            </div>
+                            <div class="keywords">
+                                ${r.topTerms.map(t => `<div class="keyword-tag">${t}</div>`).join('')}
+                            </div>
+                        `;
+                        grid.appendChild(card);
+                    });
+                }
+
+                loading.style.display = 'none';
+                targetDash.style.display = 'flex';
+
+            } catch (err) {
+                loading.style.display = 'none';
+                alert(err.message);
+            }
+        }
+
+        checkStatus();
+        setInterval(checkStatus, 3000);
+    </script>
+</body>
+</html>
