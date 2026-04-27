@@ -40,14 +40,7 @@ function delay(ms) {
     return new Promise(resolve => setTimeout(resolve, ms));
 }
 
-function randomString(length) {
-    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
-    let result = '';
-    for (let i = 0; i < length; i++) {
-        result += chars.charAt(Math.floor(Math.random() * chars.length));
-    }
-    return result;
-}
+
 
 function youtube_flag(e) {
     let b = 0;
@@ -145,51 +138,61 @@ function connectDB() {
     return pool;
 }
 
-async function insertChat(poolOrConn, chatData) {
+async function insertChat(thePool, chatData) {
     const { sid, channel, authorId, author, authorAlt, thumb, message, msgdata, flag, timestamp } = chatData;
-    const conn = poolOrConn.getConnection ? await poolOrConn.getConnection() : poolOrConn;
-    try {
-        // 1. User UPSERT + cache
-        let userEntry = userCache.get(authorId);
-        if (!userEntry) {
-            await conn.execute(
-                'INSERT IGNORE INTO youtube_users (authorId) VALUES (?)',
-                [authorId]
-            );
-            const [uRows] = await conn.execute(
-                'SELECT uid FROM youtube_users WHERE authorId = ?', [authorId]
-            );
-            userEntry = { uid: uRows[0].uid, profiles: new Map() };
-            userCache.set(authorId, userEntry);
-        }
 
-        // 2. Profile UPSERT (author + thumb 조합으로 이력 관리)
-        const profileKey = author + '\0' + thumb;
-        let nid = userEntry.profiles.get(profileKey);
-        if (!nid) {
-            const [existing] = await conn.execute(
-                'SELECT nid FROM youtube_user_names WHERE uid = ? AND author = ? AND thumb = ?',
-                [userEntry.uid, author, thumb]
-            );
-            if (existing.length > 0) {
-                nid = existing[0].nid;
-            } else {
-                const [ins] = await conn.execute(
-                    'INSERT INTO youtube_user_names (uid, author, authorAlt, thumb, first_seen) VALUES (?, ?, ?, ?, ?)',
-                    [userEntry.uid, author, authorAlt, thumb, timestamp]
+    // 캐시에서 uid, nid를 모두 찾으면 커넥션 1회만 사용 (INSERT만)
+    let userEntry = userCache.get(authorId);
+    const profileKey = author + '\0' + thumb;
+    let nid = userEntry?.profiles?.get(profileKey);
+
+    // 캐시 미스 시에만 조회 쿼리 실행
+    if (!userEntry || !nid) {
+        const conn = await thePool.getConnection();
+        try {
+            if (!userEntry) {
+                await conn.execute(
+                    'INSERT IGNORE INTO youtube_users (authorId) VALUES (?)',
+                    [authorId]
                 );
-                nid = ins.insertId;
+                const [uRows] = await conn.execute(
+                    'SELECT uid FROM youtube_users WHERE authorId = ?', [authorId]
+                );
+                userEntry = { uid: uRows[0].uid, profiles: new Map() };
+                userCache.set(authorId, userEntry);
             }
-            userEntry.profiles.set(profileKey, nid);
-        }
 
-        // 3. Insert chat
-        await conn.execute(
+            if (!nid) {
+                const [existing] = await conn.execute(
+                    'SELECT nid FROM youtube_user_names WHERE uid = ? AND author = ? AND thumb = ?',
+                    [userEntry.uid, author, thumb]
+                );
+                if (existing.length > 0) {
+                    nid = existing[0].nid;
+                } else {
+                    const [ins] = await conn.execute(
+                        'INSERT INTO youtube_user_names (uid, author, authorAlt, thumb, first_seen) VALUES (?, ?, ?, ?, ?)',
+                        [userEntry.uid, author, authorAlt, thumb, timestamp]
+                    );
+                    nid = ins.insertId;
+                }
+                userEntry.profiles.set(profileKey, nid);
+            }
+
+            // 캐시 미스 경우: 같은 커넥션으로 INSERT까지 처리
+            await conn.execute(
+                'INSERT INTO youtube_chat3 (sid, channel, nid, message, msgdata, flag, timestamp) VALUES (?, ?, ?, ?, ?, ?, ?)',
+                [sid, channel, nid, message, msgdata, flag, timestamp]
+            );
+        } finally {
+            conn.release();
+        }
+    } else {
+        // 캐시 히트: INSERT 1회만 (pool.execute로 커넥션 자동 관리)
+        await thePool.execute(
             'INSERT INTO youtube_chat3 (sid, channel, nid, message, msgdata, flag, timestamp) VALUES (?, ?, ?, ?, ?, ?, ?)',
             [sid, channel, nid, message, msgdata, flag, timestamp]
         );
-    } finally {
-        if (poolOrConn.getConnection) conn.release();
     }
 }
 
@@ -211,7 +214,7 @@ async function flushDbBuffer() {
             if (isConnectionError(err)) {
                 console.error('[Buffer] DB connection lost during flush, pausing...');
                 dbConnected = false;
-                dbConnectionPromise = null;
+                pool = null;
                 break;
             }
             // 기타 에러는 로그 후 건너뜀
@@ -309,18 +312,26 @@ async function createLive(id, reset) {
             delete message.s;
 
         const ts = chatItem.timestamp ? new Date(chatItem.timestamp) : new Date();
+        const msgJson = JSON.stringify(message);
 
-        savedataDB({
-            sid,
-            channel: id,
-            authorId: NVL(chatItem.author?.channelId),
-            author: NVL(chatItem.author?.name),
-            authorAlt: NVL(chatItem.author?.thumbnail?.alt),
-            thumb: NVL(chatItem.author?.thumbnail?.url),
-            message: zlib.deflateRawSync(Buffer.from(JSON.stringify(message), 'utf8')),
-            msgdata: tokMessage((chatItem.message || []).map(e => e.text).join(' ')),
-            flag: youtube_flag(chatItem),
-            timestamp: ts
+        // 비동기 압축으로 이벤트 루프 블로킹 방지
+        zlib.deflateRaw(Buffer.from(msgJson, 'utf8'), (err, compressed) => {
+            if (err) {
+                console.error('Compress error:', err.message);
+                return;
+            }
+            savedataDB({
+                sid,
+                channel: id,
+                authorId: NVL(chatItem.author?.channelId),
+                author: NVL(chatItem.author?.name),
+                authorAlt: NVL(chatItem.author?.thumbnail?.alt),
+                thumb: NVL(chatItem.author?.thumbnail?.url),
+                message: compressed,
+                msgdata: tokMessage((chatItem.message || []).map(e => e.text).join(' ')),
+                flag: youtube_flag(chatItem),
+                timestamp: ts
+            });
         });
     });
 
@@ -418,14 +429,8 @@ async function queryChat(req, res, direction) {
     let filters = [];
     try { filters = JSON.parse(req.query.filters || "[]"); } catch (e) { filters = []; }
 
-    // Phase 1: ID만 뽑는 서브쿼리 조건 (가벼운 인덱스 스캔)
     const idConditions = [];
     const idParams = [];
-    // Phase 2: JOIN이 필요한 필터 (author, userId)
-    let needUserJoin = false;
-    let needNameJoin = false;
-    const joinConditions = [];
-    const joinParams = [];
 
     idConditions.push(isDown ? "c.id < ?" : "c.id >= ?");
     idParams.push(start);

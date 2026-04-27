@@ -636,13 +636,17 @@
                     hideLoading();
                     if (json.length > 0) {
                         if (a === "data") {
-                            json.forEach(m => chatMessages.appendChild(render(m)));
+                            const frag = document.createDocumentFragment();
+                            json.forEach(m => frag.appendChild(render(m)));
+                            chatMessages.appendChild(frag);
                             const l_id = json[json.length - 1].id;
                             if (l_id < lastID) lastID = l_id;
                         }
                         else if (a === "udata") {
                             const scrollHeight = document.documentElement.scrollHeight;
-                            json.forEach(m => chatMessages.prepend(render(m)));
+                            const frag = document.createDocumentFragment();
+                            json.forEach(m => frag.appendChild(render(m)));
+                            chatMessages.prepend(frag);
                             setScrollPos(document.documentElement.scrollHeight - scrollHeight);
                             const f_id = json[0].id;
                             if (firstID === 0 || f_id < firstID) firstID = f_id;
@@ -668,12 +672,18 @@
             if (dir.includes("down")) await getContents("data", lastID);
             loading = false;
         }
+        let scrollTicking = false;
         function onScroll() {
-            const { scrollTop, scrollHeight, clientHeight } = document.documentElement;
-            const bottom = scrollHeight - scrollTop - clientHeight;
-            if (loading) return;
-            if (bottom < 200 && hasMoreD) load(false, 0, "down");
-            else if (scrollTop < 100 && hasMoreU && firstID > 0) load(false, 0, "up");
+            if (scrollTicking) return;
+            scrollTicking = true;
+            requestAnimationFrame(() => {
+                scrollTicking = false;
+                const { scrollTop, scrollHeight, clientHeight } = document.documentElement;
+                const bottom = scrollHeight - scrollTop - clientHeight;
+                if (loading) return;
+                if (bottom < 200 && hasMoreD) load(false, 0, "down");
+                else if (scrollTop < 100 && hasMoreU && firstID > 0) load(false, 0, "up");
+            });
         }
         function findParentDataId(element, attr) {
             let current = element.parentNode;
