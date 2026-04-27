@@ -464,7 +464,7 @@ async function queryChat(req, res, direction) {
     const order = isDown ? "DESC" : "ASC";
 
     // 2단계 쿼리: 먼저 ID만 빠르게 뽑고, 그 ID로 JOIN해서 상세 데이터 가져옴
-    const idWhere = idConditions.join(" AND ");
+    const idWhere = idConditions.join(" AND ").replace(/\bc\./g, 'c2.');
     const sql = `SELECT c.id, c.channel, n.author, n.authorAlt, u.authorId,
                         n.thumb AS authorThumb, c.message, c.flag, c.timestamp
                  FROM youtube_chat3 c
@@ -472,13 +472,13 @@ async function queryChat(req, res, direction) {
                  JOIN youtube_users u ON n.uid = u.uid
                  WHERE c.id IN (
                      SELECT sub.id FROM (
-                         SELECT c.id FROM youtube_chat3 c
+                         SELECT c2.id FROM youtube_chat3 c2
                          WHERE ${idWhere}
-                         ORDER BY c.id ${order}
+                         ORDER BY c2.id ${order}
                          LIMIT 100
                      ) sub
                  )
-                 ORDER BY c.id ${order}`;
+                 ORDER BY c.timestamp ${order}, c.id ${order}`;
 
     let conn;
     try {

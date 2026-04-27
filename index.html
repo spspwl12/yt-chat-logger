@@ -645,7 +645,8 @@
                         else if (a === "udata") {
                             const scrollHeight = document.documentElement.scrollHeight;
                             const frag = document.createDocumentFragment();
-                            json.forEach(m => frag.appendChild(render(m)));
+                            // 서버는 ASC(오래된→최신)로 보내지만, 화면은 DESC(최신→오래된)이므로 역순 렌더링
+                            for (let i = json.length - 1; i >= 0; i--) frag.appendChild(render(json[i]));
                             chatMessages.prepend(frag);
                             setScrollPos(document.documentElement.scrollHeight - scrollHeight);
                             const f_id = json[0].id;
