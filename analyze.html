@@ -16,6 +16,7 @@
             --primary: #3b82f6;
             --primary-hover: #2563eb;
             --accent: #8b5cf6;
+            --interest: #10b981;
         }
 
         * {
@@ -131,7 +132,7 @@
             font-family: inherit;
             outline: none;
             transition: border-color 0.2s;
-            min-width: 0; /* Prevents input from blowing out flex container */
+            min-width: 0;
         }
 
         input[type="text"]:focus {
@@ -226,7 +227,7 @@
 
         .user-info {
             flex: 1;
-            min-width: 0; /* Important for text truncation/wrapping inside flex */
+            min-width: 0;
         }
 
         .user-info h3 {
@@ -251,6 +252,7 @@
             flex-direction: column;
             align-items: flex-end;
             flex-shrink: 0;
+            gap: 6px;
         }
 
         .score-value {
@@ -265,6 +267,48 @@
             text-transform: uppercase;
             letter-spacing: 0.5px;
         }
+
+        /* Dual Score Bars */
+        .score-bars {
+            display: flex;
+            gap: 16px;
+            align-items: center;
+        }
+
+        .score-bar-item {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+
+        .score-bar-header {
+            display: flex;
+            justify-content: space-between;
+            font-size: 12px;
+            color: var(--text-muted);
+        }
+
+        .score-bar-header .val {
+            font-weight: 600;
+            color: var(--text-main);
+        }
+
+        .score-bar-track {
+            height: 6px;
+            background: rgba(255,255,255,0.06);
+            border-radius: 3px;
+            overflow: hidden;
+        }
+
+        .score-bar-fill {
+            height: 100%;
+            border-radius: 3px;
+            transition: width 0.5s ease;
+        }
+
+        .score-bar-fill.style { background: linear-gradient(90deg, var(--primary), var(--accent)); }
+        .score-bar-fill.interest { background: linear-gradient(90deg, var(--interest), #34d399); }
 
         .keywords {
             display: flex;
@@ -281,7 +325,52 @@
             border-radius: 6px;
             font-size: 13px;
             color: #d4d4d8;
-            white-space: nowrap; /* Prevent breaking inside the tag */
+            white-space: nowrap;
+        }
+
+        .keyword-tag.interest-tag {
+            background: rgba(16, 185, 129, 0.08);
+            border-color: rgba(16, 185, 129, 0.25);
+            color: #6ee7b7;
+        }
+
+        .keyword-tag.opinion-tag {
+            background: rgba(139, 92, 246, 0.08);
+            border-color: rgba(139, 92, 246, 0.25);
+            color: #c4b5fd;
+        }
+
+        .keyword-tag.channel-tag {
+            background: rgba(59, 130, 246, 0.08);
+            border-color: rgba(59, 130, 246, 0.25);
+            color: #93c5fd;
+        }
+
+        .keyword-tag.rare-tag {
+            background: rgba(249, 115, 22, 0.10);
+            border-color: rgba(249, 115, 22, 0.30);
+            color: #fdba74;
+        }
+
+        .keyword-tag .df-badge {
+            font-size: 10px;
+            background: rgba(255,255,255,0.08);
+            padding: 1px 5px;
+            border-radius: 3px;
+            margin-left: 4px;
+            color: var(--text-muted);
+        }
+
+        .score-bar-fill.rare { background: linear-gradient(90deg, #f97316, #fb923c); }
+
+        .section-label {
+            font-size: 11px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            color: var(--text-muted);
+            width: 100%;
+            margin-top: 4px;
         }
 
         .rank-badge {
@@ -324,7 +413,60 @@
             .match-score { align-items: flex-start; }
             header { padding: 16px 20px; }
             main { padding: 20px 16px; }
+            .score-bars { flex-direction: column; }
+            .weight-sliders { flex-direction: column; }
         }
+
+        .weight-sliders {
+            display: flex;
+            gap: 16px;
+            margin-top: 12px;
+            padding: 16px;
+            background: rgba(255,255,255,0.02);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+        }
+
+        .weight-slider-item {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+
+        .weight-slider-item label {
+            font-size: 12px;
+            color: var(--text-muted);
+            display: flex;
+            justify-content: space-between;
+        }
+
+        .weight-slider-item label .wval {
+            color: var(--text-main);
+            font-weight: 600;
+        }
+
+        .weight-slider-item input[type="range"] {
+            -webkit-appearance: none;
+            width: 100%;
+            height: 6px;
+            background: var(--border);
+            border-radius: 3px;
+            outline: none;
+        }
+
+        .weight-slider-item input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            width: 16px;
+            height: 16px;
+            border-radius: 50%;
+            background: var(--primary);
+            cursor: pointer;
+            border: 2px solid var(--bg);
+        }
+
+        .weight-slider-item.interest input[type="range"]::-webkit-slider-thumb { background: var(--interest); }
+        .weight-slider-item.rare input[type="range"]::-webkit-slider-thumb { background: #f97316; }
     </style>
 </head>
 <body>
@@ -343,7 +485,7 @@
     <main>
         <div class="search-container">
             <h1>Find Alt-Accounts</h1>
-            <p style="color: var(--text-muted); font-size: 14px; margin-top: -8px;">Enter an author ID to find users with similar chatting patterns.</p>
+            <p style="color: var(--text-muted); font-size: 14px; margin-top: -8px;">Enter an author ID to find users with similar chatting patterns and interests.</p>
             <div class="search-box">
                 <input type="text" id="targetInput" placeholder="Enter target authorId (e.g. UC123...)" onkeypress="if(event.key === 'Enter') analyze()">
                 <button onclick="analyze()">Deep Scan</button>
@@ -351,6 +493,20 @@
             <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 8px;">
                 <span id="cacheInfo" style="font-size: 13px; color: var(--text-muted);">Cache: --</span>
                 <button class="refresh-btn" onclick="refreshCache()">Force Cache Rebuild</button>
+            </div>
+            <div class="weight-sliders">
+                <div class="weight-slider-item">
+                    <label>✍️ 문체 <span class="wval" id="wsLabel">40%</span></label>
+                    <input type="range" id="wsSlider" min="0" max="100" value="40" oninput="updateWeightLabel()">
+                </div>
+                <div class="weight-slider-item interest">
+                    <label>🎯 관심사 <span class="wval" id="wiLabel">30%</span></label>
+                    <input type="range" id="wiSlider" min="0" max="100" value="30" oninput="updateWeightLabel()">
+                </div>
+                <div class="weight-slider-item rare">
+                    <label>🔥 희귀용어 <span class="wval" id="wrLabel">30%</span></label>
+                    <input type="range" id="wrSlider" min="0" max="100" value="30" oninput="updateWeightLabel()">
+                </div>
             </div>
         </div>
 
@@ -367,7 +523,7 @@
 
         <div class="loading-state" id="loading">
             <div class="spinner"></div>
-            <div>Analyzing vectors and computing similarities...</div>
+            <div>Analyzing style vectors and interest patterns...</div>
         </div>
 
         <div class="results-list" id="resultGrid">
@@ -412,6 +568,14 @@
             } catch(e) {}
         }
 
+        function esc(s) { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
+
+        function updateWeightLabel() {
+            document.getElementById('wsLabel').textContent = document.getElementById('wsSlider').value + '%';
+            document.getElementById('wiLabel').textContent = document.getElementById('wiSlider').value + '%';
+            document.getElementById('wrLabel').textContent = document.getElementById('wrSlider').value + '%';
+        }
+
         async function analyze() {
             const target = document.getElementById('targetInput').value.trim();
             if (!target) return;
@@ -426,7 +590,10 @@
 
             try {
                 const startT = performance.now();
-                const res = await fetch(`/api/analyze?target=${encodeURIComponent(target)}`);
+                const ws = parseInt(document.getElementById('wsSlider').value) / 100;
+                const wi = parseInt(document.getElementById('wiSlider').value) / 100;
+                const wr = parseInt(document.getElementById('wrSlider').value) / 100;
+                const res = await fetch(`/api/analyze?target=${encodeURIComponent(target)}&ws=${ws}&wi=${wi}&wr=${wr}`);
                 const data = await res.json();
                 const endT = performance.now();
 
@@ -441,6 +608,9 @@
                 } else {
                     data.results.forEach((r, idx) => {
                         const simPct = (r.similarity * 100).toFixed(1);
+                        const stylePct = (r.styleSim * 100).toFixed(1);
+                        const intPct = (r.interestSim * 100).toFixed(1);
+                        const rarePct = ((r.rareSim || 0) * 100).toFixed(1);
                         
                         let rankClass = 'rank-other';
                         if (idx === 0) rankClass = 'rank-1';
@@ -449,22 +619,80 @@
 
                         const card = document.createElement('div');
                         card.className = 'result-card';
+
+                        // 관심사 태그 생성
+                        const ti = r.topInterests || {};
+                        let interestHTML = '';
+
+                        if (ti.channels && ti.channels.length > 0) {
+                            interestHTML += `<div class="section-label">📺 공통 채널</div>`;
+                            interestHTML += ti.channels.map(c => `<div class="keyword-tag channel-tag">${esc(c)}</div>`).join('');
+                        }
+                        if (ti.topics && ti.topics.length > 0) {
+                            interestHTML += `<div class="section-label">💬 공통 관심사</div>`;
+                            interestHTML += ti.topics.map(t => `<div class="keyword-tag interest-tag">${esc(t)}</div>`).join('');
+                        }
+                        if (ti.opinions && ti.opinions.length > 0) {
+                            interestHTML += `<div class="section-label">🎯 공통 선호도</div>`;
+                            interestHTML += ti.opinions.map(o => `<div class="keyword-tag opinion-tag">${esc(o)}</div>`).join('');
+                        }
+
+                        // 희귀 공유 용어 태그
+                        const rt = r.rareTerms || [];
+                        let rareHTML = '';
+                        if (rt.length > 0) {
+                            rareHTML = `<div class="section-label">🔥 희귀 공유 용어 (둘만 쓰는 단어)</div>`;
+                            rareHTML += rt.map(x => `<div class="keyword-tag rare-tag">${esc(x.term)}<span class="df-badge">${x.users}명</span></div>`).join('');
+                        }
+
                         card.innerHTML = `
                             <div class="card-top">
                                 <div class="user-info">
                                     <h3>
                                         <span class="rank-badge ${rankClass}">#${idx + 1}</span>
-                                        ${r.authorName || 'Unknown User'}
+                                        ${esc(r.authorName || 'Unknown User')}
                                     </h3>
-                                    <div class="user-id">${r.authorId} &middot; ${r.msgCount} msgs</div>
+                                    <div class="user-id">${esc(r.authorId)} &middot; ${r.msgCount} msgs</div>
                                 </div>
                                 <div class="match-score">
                                     <div class="score-value">${simPct}%</div>
-                                    <div class="score-label">Similarity</div>
+                                    <div class="score-label">Combined</div>
+                                </div>
+                            </div>
+                            <div class="score-bars">
+                                <div class="score-bar-item">
+                                    <div class="score-bar-header">
+                                        <span>✍️ 문체</span>
+                                        <span class="val">${stylePct}%</span>
+                                    </div>
+                                    <div class="score-bar-track">
+                                        <div class="score-bar-fill style" style="width: ${Math.min(stylePct, 100)}%"></div>
+                                    </div>
+                                </div>
+                                <div class="score-bar-item">
+                                    <div class="score-bar-header">
+                                        <span>🎯 관심사</span>
+                                        <span class="val">${intPct}%</span>
+                                    </div>
+                                    <div class="score-bar-track">
+                                        <div class="score-bar-fill interest" style="width: ${Math.min(intPct, 100)}%"></div>
+                                    </div>
+                                </div>
+                                <div class="score-bar-item">
+                                    <div class="score-bar-header">
+                                        <span>🔥 희귀용어</span>
+                                        <span class="val">${rarePct}%</span>
+                                    </div>
+                                    <div class="score-bar-track">
+                                        <div class="score-bar-fill rare" style="width: ${Math.min(rarePct, 100)}%"></div>
+                                    </div>
                                 </div>
                             </div>
                             <div class="keywords">
-                                ${r.topTerms.map(t => `<div class="keyword-tag">${t}</div>`).join('')}
+                                ${rareHTML}
+                                <div class="section-label">✍️ 문체 유사 패턴</div>
+                                ${r.topTerms.map(t => `<div class="keyword-tag">${esc(t)}</div>`).join('')}
+                                ${interestHTML}
                             </div>
                         `;
                         grid.appendChild(card);
