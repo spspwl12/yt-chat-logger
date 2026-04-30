@@ -378,6 +378,122 @@
             color: #717171;
             gap: 8px
         }
+
+        /* Context Menu */
+        .context-menu {
+            position: fixed;
+            background: #252525;
+            border: 1px solid #3d3d3d;
+            border-radius: 4px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.5);
+            padding: 4px 0;
+            z-index: 20000;
+            display: none;
+            min-width: 150px;
+        }
+
+        .context-menu-item {
+            padding: 8px 16px;
+            font-size: 13px;
+            color: #f1f1f1;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+
+        .context-menu-item:hover {
+            background: #3d3d3d;
+        }
+
+        /* History Modal */
+        .history-modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0,0,0,0.7);
+            z-index: 30000;
+            display: none;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .history-modal {
+            background: #212121;
+            border: 1px solid #3d3d3d;
+            border-radius: 8px;
+            width: 85%;
+            max-width: 320px;
+            max-height: 75%;
+            display: flex;
+            flex-direction: column;
+            box-shadow: 0 8px 24px rgba(0,0,0,0.6);
+        }
+
+        .history-modal-header {
+            padding: 16px;
+            border-bottom: 1px solid #3d3d3d;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 16px;
+            font-weight: 500;
+        }
+
+        .history-modal-close {
+            cursor: pointer;
+            font-size: 20px;
+            color: #aaa;
+            transition: color 0.2s;
+            line-height: 1;
+        }
+
+        .history-modal-close:hover {
+            color: #fff;
+        }
+
+        .history-modal-content {
+            padding: 16px;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .history-item {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 8px;
+            background: #1a1a1a;
+            border-radius: 6px;
+            border: 1px solid #303030;
+        }
+
+        .history-item-thumb {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            flex-shrink: 0;
+            background: #303030;
+        }
+
+        .history-item-info {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+
+        .history-item-name {
+            font-size: 14px;
+            font-weight: 500;
+            color: #fff;
+        }
+
+        .history-item-date {
+            font-size: 12px;
+            color: #aaa;
+        }
     </style>
     <script src="https://cdn.jsdelivr.net/npm/pako@2/dist/pako.min.js"></script>
 
@@ -405,6 +521,22 @@
         </div>
         <div class="chat-messages" id="chatMessages"></div>
     </div>
+
+    <div id="contextMenu" class="context-menu">
+        <div class="context-menu-item" id="contextMenuHistory">사용자 닉네임 + 프로필사진 변경 이력</div>
+    </div>
+
+    <div id="historyModalOverlay" class="history-modal-overlay">
+        <div class="history-modal">
+            <div class="history-modal-header">
+                <span id="historyModalTitle">닉네임 변경 이력</span>
+                <span class="history-modal-close" id="historyModalClose">&times;</span>
+            </div>
+            <div class="history-modal-content" id="historyModalContent">
+            </div>
+        </div>
+    </div>
+
     <script>
         const mainLogo = document.getElementById('main-logo');
         const chatMessages = document.getElementById('chatMessages');
@@ -412,6 +544,12 @@
         const chipInputArea = document.getElementById('chipInputArea');
         const chipInput = document.getElementById('chipInput');
         const chipTypeSelect = document.getElementById('chipTypeSelect');
+        const contextMenu = document.getElementById('contextMenu');
+        const contextMenuHistory = document.getElementById('contextMenuHistory');
+        const historyModalOverlay = document.getElementById('historyModalOverlay');
+        const historyModalClose = document.getElementById('historyModalClose');
+        const historyModalContent = document.getElementById('historyModalContent');
+        let currentContextAuthorId = null;
 
         const CHIP_LABELS = {
             text: '검색', channel: '채널', userId: '유저',
@@ -570,6 +708,27 @@
             e3.addEventListener('dblclick', function (e) {
                 e.preventDefault();
                 addChip('@' + e.target.getAttribute("data-user"));
+            });
+            e3.addEventListener('contextmenu', function (e) {
+                e.preventDefault();
+                currentContextAuthorId = e.target.getAttribute("data-user");
+                contextMenu.style.display = 'block';
+                
+                const zoomLevel = parseFloat(getComputedStyle(document.body).zoom) || 1;
+                let left = e.clientX / zoomLevel;
+                let top = e.clientY / zoomLevel;
+                
+                // Adjust for menu dimensions to prevent overflow
+                const rect = contextMenu.getBoundingClientRect();
+                if (e.clientX + rect.width * zoomLevel > window.innerWidth) {
+                    left -= rect.width;
+                }
+                if (e.clientY + rect.height * zoomLevel > window.innerHeight) {
+                    top -= rect.height;
+                }
+                
+                contextMenu.style.left = left + 'px';
+                contextMenu.style.top = top + 'px';
             });
             return d;
         }
@@ -732,6 +891,58 @@
             }
             if (e.key === 'Backspace' && !chipInput.value && chips.length > 0) {
                 removeChip(chips.length - 1);
+            }
+        });
+
+        // Context Menu & History Modal
+        document.addEventListener('click', (e) => {
+            if (e.target !== contextMenu && !contextMenu.contains(e.target)) {
+                contextMenu.style.display = 'none';
+            }
+        });
+
+        contextMenuHistory.addEventListener('click', async () => {
+            contextMenu.style.display = 'none';
+            if (!currentContextAuthorId) return;
+
+            historyModalOverlay.style.display = 'flex';
+            historyModalContent.innerHTML = '<div class="loading"><div class="spinner"></div> 로딩중...</div>';
+
+            try {
+                const res = await fetch('/api/user_history/' + encodeURIComponent(currentContextAuthorId));
+                const data = await res.json();
+                
+                if (!data || data.length === 0) {
+                    historyModalContent.innerHTML = '<div class="empty">이력이 없습니다.</div>';
+                    return;
+                }
+
+                historyModalContent.innerHTML = '';
+                data.forEach(item => {
+                    const dateStr = new Date(item.first_seen).toLocaleString();
+                    const d = document.createElement('div');
+                    d.className = 'history-item';
+                    d.innerHTML = `
+                        <img class="history-item-thumb" src="${item.thumb}" onerror="this.src='data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI0MCIgaGVpZ2h0PSI0MCI+PHJlY3Qgd2lkdGg9IjQwIiBoZWlnaHQ9IjQwIiBmaWxsPSIjMzAzMDMwIi8+PC9zdmc+'">
+                        <div class="history-item-info">
+                            <div class="history-item-name">${item.author}</div>
+                            <div class="history-item-date">${dateStr}</div>
+                        </div>
+                    `;
+                    historyModalContent.appendChild(d);
+                });
+            } catch (err) {
+                historyModalContent.innerHTML = '<div class="empty">불러오기 실패</div>';
+            }
+        });
+
+        historyModalClose.addEventListener('click', () => {
+            historyModalOverlay.style.display = 'none';
+        });
+
+        historyModalOverlay.addEventListener('click', (e) => {
+            if (e.target === historyModalOverlay) {
+                historyModalOverlay.style.display = 'none';
             }
         });
 

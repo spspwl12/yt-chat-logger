@@ -506,6 +506,30 @@ async function queryChat(req, res, direction) {
     }
 }
 
+app.get('/api/user_history/:authorId', async (req, res) => {
+    const authorId = req.params.authorId;
+    if (!authorId) return res.status(400).json({ error: 'authorId is required' });
+
+    let conn;
+    try {
+        conn = await connectDB().getConnection();
+        const sql = `
+            SELECT n.author, n.thumb, n.first_seen
+            FROM youtube_user_names n
+            JOIN youtube_users u ON n.uid = u.uid
+            WHERE u.authorId = ?
+            ORDER BY n.first_seen ASC
+        `;
+        const [rows] = await conn.execute(sql, [authorId]);
+        res.json(rows);
+    } catch (err) {
+        console.error("User history query error:", err.message);
+        res.status(500).json({ error: 'Database error' });
+    } finally {
+        if (conn) conn.release();
+    }
+});
+
 app.get("/data", (req, res) => queryChat(req, res, "down"));
 app.get("/udata", (req, res) => queryChat(req, res, "up"));
 
