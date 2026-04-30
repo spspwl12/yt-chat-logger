@@ -86,26 +86,26 @@ function convertColorToHex6(colorNum) {
 }
 /** メッセージrun配列をMessageItem配列へ変換 */
 function parseMessages(runs) {
-try{
-    return runs.map((run) => {
-        if ("text" in run) {
-            return run;
-        }
-        else {
-            // Emoji
-            const thumbnail = run.emoji.image.thumbnails.shift();
-            const isCustomEmoji = Boolean(run.emoji.isCustomEmoji);
-            const shortcut = run.emoji.shortcuts ? run.emoji.shortcuts[0] : "";
-            return {
-                url: thumbnail ? thumbnail.url : "",
-                alt: shortcut,
-                isCustomEmoji: isCustomEmoji,
-                emojiText: isCustomEmoji ? shortcut : run.emoji.emojiId,
-            };
-        }
-    });
+    try {
+        return runs.map((run) => {
+            if ("text" in run) {
+                return run;
+            }
+            else {
+                // Emoji
+                const thumbnail = run.emoji.image.thumbnails.shift();
+                const isCustomEmoji = Boolean(run.emoji.isCustomEmoji);
+                const shortcut = run.emoji.shortcuts ? run.emoji.shortcuts[0] : "";
+                return {
+                    url: thumbnail ? thumbnail.url : "",
+                    alt: shortcut,
+                    isCustomEmoji: isCustomEmoji,
+                    emojiText: isCustomEmoji ? shortcut : run.emoji.emojiId,
+                };
+            }
+        });
     } catch {
-    	return [];
+        return [];
     }
 }
 /** actionの種類を判別してRendererを返す */
