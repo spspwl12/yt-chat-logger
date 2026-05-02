@@ -431,6 +431,13 @@ async function init() {
 app.use(express.static(__dirname, { index: false }));
 app.use(express.json());
 
+// Enable CORS for API requests from the main web server (e.g., port 3000)
+app.use((req, res, next) => {
+    res.header("Access-Control-Allow-Origin", "*");
+    res.header("Access-Control-Allow-Headers", "Origin, X-Requested-With, Content-Type, Accept");
+    next();
+});
+
 app.get(['/', '/analyze', '/analyze.html'], (req, res) => {
     const filePath = path.join(__dirname, 'analyze.html');
     if (!fs.existsSync(filePath)) {

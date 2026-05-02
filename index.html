@@ -272,6 +272,11 @@
             cursor: pointer;
             text-decoration: none;
             word-break: break-all;
+            -webkit-user-select: none;
+            -moz-user-select: none;
+            -ms-user-select: none;
+            user-select: none;
+            -webkit-touch-callout: none;
         }
 
         .username:hover {
@@ -494,6 +499,102 @@
             font-size: 12px;
             color: #aaa;
         }
+        /* DeepScan Modal Styles */
+        .deepscan-modal {
+            background: #0a0a0a;
+            border: 1px solid #27272a;
+            border-radius: 12px;
+            width: 95%;
+            max-width: 500px;
+            max-height: 85%;
+            display: flex;
+            flex-direction: column;
+            box-shadow: 0 8px 32px rgba(0,0,0,0.8);
+        }
+
+        .deepscan-modal-content {
+            padding: 16px;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+        }
+
+        /* Reused Analyze Styles */
+        .weight-sliders {
+            display: flex;
+            gap: 12px;
+            padding: 12px;
+            background: rgba(255,255,255,0.03);
+            border: 1px solid #27272a;
+            border-radius: 8px;
+        }
+        .weight-slider-item {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+        .weight-slider-item label {
+            font-size: 11px;
+            color: #a1a1aa;
+            display: flex;
+            justify-content: space-between;
+        }
+        .weight-slider-item label .wval { color: #f4f4f5; font-weight: 600; }
+        .weight-slider-item input[type="range"] {
+            -webkit-appearance: none; width: 100%; height: 4px;
+            background: #27272a; border-radius: 2px; outline: none;
+        }
+        .weight-slider-item input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none; width: 12px; height: 12px;
+            border-radius: 50%; background: #3b82f6; cursor: pointer;
+        }
+        .weight-slider-item.interest input[type="range"]::-webkit-slider-thumb { background: #10b981; }
+        .weight-slider-item.rare input[type="range"]::-webkit-slider-thumb { background: #f97316; }
+
+        .deepscan-btn {
+            background: #3b82f6; color: white; border: none; padding: 10px;
+            border-radius: 6px; font-size: 13px; font-weight: 600;
+            cursor: pointer; transition: background 0.2s; text-align: center;
+        }
+        .deepscan-btn:hover { background: #2563eb; }
+
+        .result-card {
+            background: #0a0a0a; border: 1px solid #27272a; border-radius: 10px;
+            padding: 16px; display: flex; flex-direction: column; gap: 12px;
+        }
+        .card-top { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; }
+        .user-info h3 { font-size: 15px; font-weight: 600; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin: 0; color: #f4f4f5; }
+        .user-id { font-size: 11px; color: #a1a1aa; font-family: monospace; margin-top: 4px; word-break: break-all; }
+        .match-score { display: flex; flex-direction: column; align-items: flex-end; flex-shrink: 0; gap: 2px; }
+        .score-value { font-size: 20px; font-weight: 700; color: #f4f4f5; }
+        .score-label { font-size: 10px; color: #a1a1aa; text-transform: uppercase; }
+
+        .score-bars { display: flex; gap: 12px; align-items: center; }
+        .score-bar-item { flex: 1; display: flex; flex-direction: column; gap: 4px; }
+        .score-bar-header { display: flex; justify-content: space-between; font-size: 10px; color: #a1a1aa; }
+        .score-bar-header .val { font-weight: 600; color: #f4f4f5; }
+        .score-bar-track { height: 4px; background: rgba(255,255,255,0.06); border-radius: 2px; overflow: hidden; }
+        .score-bar-fill { height: 100%; border-radius: 2px; }
+        .score-bar-fill.style { background: linear-gradient(90deg, #3b82f6, #8b5cf6); }
+        .score-bar-fill.interest { background: linear-gradient(90deg, #10b981, #34d399); }
+        .score-bar-fill.rare { background: linear-gradient(90deg, #f97316, #fb923c); }
+
+        .keywords { display: flex; flex-wrap: wrap; gap: 6px; padding-top: 12px; border-top: 1px dashed #27272a; }
+        .keyword-tag { background: rgba(255,255,255,0.05); border: 1px solid #27272a; padding: 4px 8px; border-radius: 4px; font-size: 11px; color: #d4d4d8; }
+        .keyword-tag.interest-tag { background: rgba(16,185,129,0.08); border-color: rgba(16,185,129,0.25); color: #6ee7b7; }
+        .keyword-tag.opinion-tag { background: rgba(139,92,246,0.08); border-color: rgba(139,92,246,0.25); color: #c4b5fd; }
+        .keyword-tag.channel-tag { background: rgba(59,130,246,0.08); border-color: rgba(59,130,246,0.25); color: #93c5fd; }
+        .keyword-tag.rare-tag { background: rgba(249,115,22,0.1); border-color: rgba(249,115,22,0.3); color: #fdba74; }
+        .df-badge { font-size: 9px; background: rgba(255,255,255,0.08); padding: 1px 4px; border-radius: 2px; margin-left: 4px; color: #a1a1aa; }
+        .section-label { font-size: 10px; font-weight: 600; color: #a1a1aa; width: 100%; margin-top: 4px; }
+        
+        .rank-badge { font-size: 10px; padding: 2px 6px; border-radius: 4px; font-weight: 600; }
+        .rank-1 { background: rgba(239,68,68,0.15); color: #ef4444; border: 1px solid rgba(239,68,68,0.3); }
+        .rank-2 { background: rgba(249,115,22,0.15); color: #f97316; border: 1px solid rgba(249,115,22,0.3); }
+        .rank-3 { background: rgba(234,179,8,0.15); color: #eab308; border: 1px solid rgba(234,179,8,0.3); }
+        .rank-other { background: #27272a; color: #a1a1aa; border: 1px solid transparent; }
     </style>
     <script src="https://cdn.jsdelivr.net/npm/pako@2/dist/pako.min.js"></script>
 
@@ -524,6 +625,7 @@
 
     <div id="contextMenu" class="context-menu">
         <div class="context-menu-item" id="contextMenuHistory">사용자 닉네임 + 프로필사진 변경 이력</div>
+        <div class="context-menu-item" id="contextMenuDeepScan">동일인물 찾기 (Deep Scan)</div>
     </div>
 
     <div id="historyModalOverlay" class="history-modal-overlay">
@@ -537,6 +639,33 @@
         </div>
     </div>
 
+    <div id="deepScanModalOverlay" class="history-modal-overlay">
+        <div class="deepscan-modal">
+            <div class="history-modal-header">
+                <span id="deepScanModalTitle">동일인물 찾기 (Deep Scan)</span>
+                <span class="history-modal-close" id="deepScanModalClose">&times;</span>
+            </div>
+            <div class="deepscan-modal-content">
+                <div class="weight-sliders">
+                    <div class="weight-slider-item">
+                        <label>✍️ 문체 <span class="wval" id="dsWsLabel">40%</span></label>
+                        <input type="range" id="dsWsSlider" min="0" max="100" value="40">
+                    </div>
+                    <div class="weight-slider-item interest">
+                        <label>🎯 관심사 <span class="wval" id="dsWiLabel">30%</span></label>
+                        <input type="range" id="dsWiSlider" min="0" max="100" value="30">
+                    </div>
+                    <div class="weight-slider-item rare">
+                        <label>🔥 희귀 <span class="wval" id="dsWrLabel">30%</span></label>
+                        <input type="range" id="dsWrSlider" min="0" max="100" value="30">
+                    </div>
+                </div>
+                <button class="deepscan-btn" id="deepScanBtn">Scan Now</button>
+                <div id="deepScanResults" style="display: flex; flex-direction: column; gap: 12px;"></div>
+            </div>
+        </div>
+    </div>
+
     <script>
         const mainLogo = document.getElementById('main-logo');
         const chatMessages = document.getElementById('chatMessages');
@@ -546,9 +675,20 @@
         const chipTypeSelect = document.getElementById('chipTypeSelect');
         const contextMenu = document.getElementById('contextMenu');
         const contextMenuHistory = document.getElementById('contextMenuHistory');
+        const contextMenuDeepScan = document.getElementById('contextMenuDeepScan');
         const historyModalOverlay = document.getElementById('historyModalOverlay');
         const historyModalClose = document.getElementById('historyModalClose');
         const historyModalContent = document.getElementById('historyModalContent');
+        const deepScanModalOverlay = document.getElementById('deepScanModalOverlay');
+        const deepScanModalClose = document.getElementById('deepScanModalClose');
+        const dsWsSlider = document.getElementById('dsWsSlider');
+        const dsWiSlider = document.getElementById('dsWiSlider');
+        const dsWrSlider = document.getElementById('dsWrSlider');
+        const dsWsLabel = document.getElementById('dsWsLabel');
+        const dsWiLabel = document.getElementById('dsWiLabel');
+        const dsWrLabel = document.getElementById('dsWrLabel');
+        const deepScanBtn = document.getElementById('deepScanBtn');
+        const deepScanResults = document.getElementById('deepScanResults');
         let currentContextAuthorId = null;
 
         const CHIP_LABELS = {
@@ -718,7 +858,6 @@
                 let left = e.clientX / zoomLevel;
                 let top = e.clientY / zoomLevel;
                 
-                // Adjust for menu dimensions to prevent overflow
                 const rect = contextMenu.getBoundingClientRect();
                 if (e.clientX + rect.width * zoomLevel > window.innerWidth) {
                     left -= rect.width;
@@ -727,8 +866,69 @@
                     top -= rect.height;
                 }
                 
-                contextMenu.style.left = left + 'px';
-                contextMenu.style.top = top + 'px';
+                contextMenu.style.left = Math.max(0, left) + 'px';
+                contextMenu.style.top = Math.max(0, top) + 'px';
+            });
+
+            let touchTimer;
+            let touchStartX = 0, touchStartY = 0;
+            let contextMenuOpened = false;
+
+            e3.addEventListener('touchstart', function(e) {
+                if (e.touches && e.touches.length === 1) {
+                    touchStartX = e.touches[0].clientX;
+                    touchStartY = e.touches[0].clientY;
+                    contextMenuOpened = false;
+                    touchTimer = setTimeout(function() {
+                        contextMenuOpened = true;
+                        currentContextAuthorId = e3.getAttribute("data-user");
+                        contextMenu.style.display = 'block';
+                        
+                        const zoomLevel = parseFloat(getComputedStyle(document.body).zoom) || 1;
+                        let left = touchStartX / zoomLevel;
+                        let top = touchStartY / zoomLevel;
+                        
+                        const rect = contextMenu.getBoundingClientRect();
+                        if (touchStartX + rect.width * zoomLevel > window.innerWidth) {
+                            left -= rect.width;
+                        }
+                        if (touchStartY + rect.height * zoomLevel > window.innerHeight) {
+                            top -= rect.height;
+                        }
+                        
+                        contextMenu.style.left = Math.max(0, left) + 'px';
+                        contextMenu.style.top = Math.max(0, top) + 'px';
+                    }, 500);
+                }
+            });
+
+            e3.addEventListener('touchmove', function(e) {
+                if (touchTimer && e.touches && e.touches.length > 0) {
+                    const dx = e.touches[0].clientX - touchStartX;
+                    const dy = e.touches[0].clientY - touchStartY;
+                    if (Math.abs(dx) > 10 || Math.abs(dy) > 10) {
+                        clearTimeout(touchTimer);
+                        touchTimer = null;
+                    }
+                }
+            });
+
+            e3.addEventListener('touchend', function(e) {
+                if (touchTimer) {
+                    clearTimeout(touchTimer);
+                    touchTimer = null;
+                }
+                if (contextMenuOpened) {
+                    if (e.cancelable) e.preventDefault();
+                    e.stopPropagation();
+                }
+            });
+
+            e3.addEventListener('touchcancel', function(e) {
+                if (touchTimer) {
+                    clearTimeout(touchTimer);
+                    touchTimer = null;
+                }
             });
             return d;
         }
@@ -945,6 +1145,173 @@
                 historyModalOverlay.style.display = 'none';
             }
         });
+
+        // Deep Scan Modal Logic
+        const esc = (s) => { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; };
+
+        function updateDsWeightLabels() {
+            dsWsLabel.textContent = dsWsSlider.value + '%';
+            dsWiLabel.textContent = dsWiSlider.value + '%';
+            dsWrLabel.textContent = dsWrSlider.value + '%';
+            
+            // Save to localStorage
+            localStorage.setItem('ds_weight_style', dsWsSlider.value);
+            localStorage.setItem('ds_weight_interest', dsWiSlider.value);
+            localStorage.setItem('ds_weight_rare', dsWrSlider.value);
+        }
+        
+        // Load from localStorage if exists
+        if (localStorage.getItem('ds_weight_style')) dsWsSlider.value = localStorage.getItem('ds_weight_style');
+        if (localStorage.getItem('ds_weight_interest')) dsWiSlider.value = localStorage.getItem('ds_weight_interest');
+        if (localStorage.getItem('ds_weight_rare')) dsWrSlider.value = localStorage.getItem('ds_weight_rare');
+        updateDsWeightLabels();
+        
+        dsWsSlider.addEventListener('input', updateDsWeightLabels);
+        dsWiSlider.addEventListener('input', updateDsWeightLabels);
+        dsWrSlider.addEventListener('input', updateDsWeightLabels);
+
+        contextMenuDeepScan.addEventListener('click', () => {
+            contextMenu.style.display = 'none';
+            if (!currentContextAuthorId) return;
+            
+            deepScanModalOverlay.style.display = 'flex';
+            deepScanResults.innerHTML = '';
+            
+            // Automatically trigger scan on open
+            doDeepScan();
+        });
+
+        deepScanBtn.addEventListener('click', doDeepScan);
+
+        deepScanModalClose.addEventListener('click', () => {
+            deepScanModalOverlay.style.display = 'none';
+        });
+
+        deepScanModalOverlay.addEventListener('click', (e) => {
+            if (e.target === deepScanModalOverlay) {
+                deepScanModalOverlay.style.display = 'none';
+            }
+        });
+
+        async function doDeepScan() {
+            if (!currentContextAuthorId) return;
+
+            deepScanBtn.disabled = true;
+            deepScanBtn.textContent = "Scanning...";
+            deepScanResults.innerHTML = '<div style="text-align:center; padding: 20px; color: #a1a1aa;"><div class="spinner" style="display:inline-block; width:20px; height:20px; border:2px solid #27272a; border-top-color:#3b82f6; border-radius:50%; animation:spin 1s linear infinite;"></div><br>Analyzing patterns...</div>';
+
+            try {
+                const ws = parseInt(dsWsSlider.value) / 100;
+                const wi = parseInt(dsWiSlider.value) / 100;
+                const wr = parseInt(dsWrSlider.value) / 100;
+                const targetUrl = `${window.location.protocol}//${window.location.hostname}:3001/api/analyze?target=${encodeURIComponent(currentContextAuthorId)}&ws=${ws}&wi=${wi}&wr=${wr}`;
+                const res = await fetch(targetUrl);
+                const data = await res.json();
+
+                if (!res.ok) throw new Error(data.error);
+
+                deepScanResults.innerHTML = '';
+
+                if (data.results.length === 0) {
+                    deepScanResults.innerHTML = '<div style="text-align:center; padding: 20px; color: #a1a1aa;">No high-confidence matches found.</div>';
+                } else {
+                    data.results.forEach((r, idx) => {
+                        const simPct = (r.similarity * 100).toFixed(1);
+                        const stylePct = (r.styleSim * 100).toFixed(1);
+                        const intPct = (r.interestSim * 100).toFixed(1);
+                        const rarePct = ((r.rareSim || 0) * 100).toFixed(1);
+                        
+                        let rankClass = 'rank-other';
+                        if (idx === 0) rankClass = 'rank-1';
+                        else if (idx === 1) rankClass = 'rank-2';
+                        else if (idx === 2) rankClass = 'rank-3';
+
+                        const card = document.createElement('div');
+                        card.className = 'result-card';
+
+                        const ti = r.topInterests || {};
+                        let interestHTML = '';
+
+                        if (ti.channels && ti.channels.length > 0) {
+                            interestHTML += `<div class="section-label">📺 공통 채널</div>`;
+                            interestHTML += ti.channels.map(c => `<div class="keyword-tag channel-tag">${esc(c)}</div>`).join('');
+                        }
+                        if (ti.topics && ti.topics.length > 0) {
+                            interestHTML += `<div class="section-label">💬 공통 관심사</div>`;
+                            interestHTML += ti.topics.map(t => `<div class="keyword-tag interest-tag">${esc(t)}</div>`).join('');
+                        }
+                        if (ti.opinions && ti.opinions.length > 0) {
+                            interestHTML += `<div class="section-label">🎯 공통 선호도</div>`;
+                            interestHTML += ti.opinions.map(o => `<div class="keyword-tag opinion-tag">${esc(o)}</div>`).join('');
+                        }
+
+                        const rt = r.rareTerms || [];
+                        let rareHTML = '';
+                        if (rt.length > 0) {
+                            rareHTML = `<div class="section-label">🔥 희귀 공유 용어 (둘만 쓰는 단어)</div>`;
+                            rareHTML += rt.map(x => `<div class="keyword-tag rare-tag">${esc(x.term)}<span class="df-badge">${x.users}명</span></div>`).join('');
+                        }
+
+                        card.innerHTML = `
+                            <div class="card-top">
+                                <div class="user-info">
+                                    <h3>
+                                        <span class="rank-badge ${rankClass}">#${idx + 1}</span>
+                                        ${esc(r.authorName || 'Unknown User')}
+                                    </h3>
+                                    <div class="user-id">${esc(r.authorId)} &middot; ${r.msgCount} msgs</div>
+                                </div>
+                                <div class="match-score">
+                                    <div class="score-value">${simPct}%</div>
+                                    <div class="score-label">Combined</div>
+                                </div>
+                            </div>
+                            <div class="score-bars">
+                                <div class="score-bar-item">
+                                    <div class="score-bar-header">
+                                        <span>✍️ 문체</span>
+                                        <span class="val">${stylePct}%</span>
+                                    </div>
+                                    <div class="score-bar-track">
+                                        <div class="score-bar-fill style" style="width: ${Math.min(stylePct, 100)}%"></div>
+                                    </div>
+                                </div>
+                                <div class="score-bar-item">
+                                    <div class="score-bar-header">
+                                        <span>🎯 관심사</span>
+                                        <span class="val">${intPct}%</span>
+                                    </div>
+                                    <div class="score-bar-track">
+                                        <div class="score-bar-fill interest" style="width: ${Math.min(intPct, 100)}%"></div>
+                                    </div>
+                                </div>
+                                <div class="score-bar-item">
+                                    <div class="score-bar-header">
+                                        <span>🔥 희귀용어</span>
+                                        <span class="val">${rarePct}%</span>
+                                    </div>
+                                    <div class="score-bar-track">
+                                        <div class="score-bar-fill rare" style="width: ${Math.min(rarePct, 100)}%"></div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="keywords">
+                                ${rareHTML}
+                                <div class="section-label">✍️ 문체 유사 패턴</div>
+                                ${r.topTerms.map(t => `<div class="keyword-tag">${esc(t)}</div>`).join('')}
+                                ${interestHTML}
+                            </div>
+                        `;
+                        deepScanResults.appendChild(card);
+                    });
+                }
+            } catch (err) {
+                deepScanResults.innerHTML = `<div style="text-align:center; padding: 20px; color: #ef4444;">오류 발생: ${esc(err.message)}</div>`;
+            } finally {
+                deepScanBtn.disabled = false;
+                deepScanBtn.textContent = "Scan Now";
+            }
+        }
 
         // 초기화
         loadSavedChips();
