@@ -10,32 +10,55 @@ function getOptionsFromLivePage(data) {
     else {
         throw new Error("Live Stream was not found");
     }
-    const replayResult = data.match(/['"]isReplay['"]:\s*(true)/);
+    const replayResult = data.match(/['"]isReplay['"]\s*:\s*(true)/);
     if (replayResult) {
         throw new Error(`${liveId} is finished live`);
     }
     let apiKey;
-    const keyResult = data.match(/['"]INNERTUBE_API_KEY['"]:\s*['"](.+?)['"]/);
-    if (keyResult) {
-        apiKey = keyResult[1];
+    const keyPatterns = [
+        /['"]INNERTUBE_API_KEY['"]\s*:\s*['"](.+?)['"]/,
+        /['"]innertubeApiKey['"]\s*:\s*['"](.+?)['"]/,
+    ];
+    for (const pattern of keyPatterns) {
+        const keyResult = data.match(pattern);
+        if (keyResult) {
+            apiKey = keyResult[1];
+            break;
+        }
     }
-    else {
+    if (!apiKey) {
         throw new Error("API Key was not found");
     }
     let clientVersion;
-    const verResult = data.match(/['"]clientVersion['"]:\s*['"]([\d.]+?)['"]/);
-    if (verResult) {
-        clientVersion = verResult[1];
+    const verPatterns = [
+        /['"]INNERTUBE_CLIENT_VERSION['"]\s*:\s*['"]([\w.]+?)['"]/,
+        /['"]clientVersion['"]\s*:\s*['"]([\w.]+?)['"]/,
+        /clientVersion\\?['"]\s*:\s*\\?['"]([\d.]+)/,
+    ];
+    for (const pattern of verPatterns) {
+        const verResult = data.match(pattern);
+        if (verResult) {
+            clientVersion = verResult[1];
+            break;
+        }
     }
-    else {
+    if (!clientVersion) {
         throw new Error("Client Version was not found");
     }
     let continuation;
-    const continuationResult = data.match(/['"]continuation['"]:\s*['"](.+?)['"]/);
-    if (continuationResult) {
-        continuation = continuationResult[1];
+    const contPatterns = [
+        /['"]continuation['"]\s*:\s*['"]([A-Za-z0-9_%-]+?)['"]/,
+        /continuationCommand['"]\s*:\s*\{[^}]*?['"]token['"]\s*:\s*['"]([A-Za-z0-9_%-]+?)['"]/,
+        /['"]reloadContinuationData['"]\s*:\s*\{[^}]*?['"]continuation['"]\s*:\s*['"]([A-Za-z0-9_%-]+?)['"]/,
+    ];
+    for (const pattern of contPatterns) {
+        const contResult = data.match(pattern);
+        if (contResult) {
+            continuation = contResult[1];
+            break;
+        }
     }
-    else {
+    if (!continuation) {
         throw new Error("Continuation was not found");
     }
     return {
@@ -48,59 +71,80 @@ function getOptionsFromLivePage(data) {
 exports.getOptionsFromLivePage = getOptionsFromLivePage;
 /** get_live_chat レスポンスを変換 */
 function parseChatData(data) {
+    var _a, _b;
+    if (!((_a = data.continuationContents) === null || _a === void 0 ? void 0 : _a.liveChatContinuation)) {
+        const err = new Error("liveChatContinuation is undefined");
+        err.code = "LIVE_CHAT_CONTINUATION_NOT_FOUND";
+        throw err;
+    }
+    const liveChatCont = data.continuationContents.liveChatContinuation;
     let chatItems = [];
-    if (data.continuationContents.liveChatContinuation.actions) {
-        chatItems = data.continuationContents.liveChatContinuation.actions
+    if (liveChatCont.actions) {
+        chatItems = liveChatCont.actions
             .map((v) => parseActionToChatItem(v))
             .filter((v) => v !== null);
     }
-    const continuationData = data.continuationContents.liveChatContinuation.continuations[0];
+    // continuations 배열 가드
+    const continuations = liveChatCont.continuations;
+    if (!continuations || continuations.length === 0) {
+        return [chatItems, ""];
+    }
+    const continuationData = continuations[0];
     let continuation = "";
-    if (continuationData.invalidationContinuationData) {
+    if ((_b = continuationData.invalidationContinuationData) === null || _b === void 0 ? void 0 : _b.continuation) {
         continuation = continuationData.invalidationContinuationData.continuation;
     }
-    else if (continuationData.timedContinuationData) {
+    else if (continuationData.timedContinuationData && continuationData.timedContinuationData.continuation) {
         continuation = continuationData.timedContinuationData.continuation;
+    }
+    else if (continuationData.liveChatReplayContinuationData && continuationData.liveChatReplayContinuationData.continuation) {
+        continuation = continuationData.liveChatReplayContinuationData.continuation;
     }
     return [chatItems, continuation];
 }
 exports.parseChatData = parseChatData;
-/** サムネイルオブジェクトをImageItemへ変換 */
+/** サムネイル → ImageItem (원본 배열 비파괴) */
 function parseThumbnailToImageItem(data, alt) {
-    const thumbnail = data.pop();
-    if (thumbnail) {
+    if (!data || data.length === 0) {
+        return { url: "", alt: "" };
+    }
+    // pop() 대신 마지막 요소 읽기 (원본 배열 보존)
+    const thumbnail = data[data.length - 1];
+    if (thumbnail && thumbnail.url) {
         return {
             url: thumbnail.url,
-            alt: alt,
+            alt: alt || "",
         };
     }
-    else {
-        return {
-            url: "",
-            alt: "",
-        };
-    }
+    return { url: "", alt: "" };
 }
 function convertColorToHex6(colorNum) {
+    if (typeof colorNum !== 'number') return "#000000";
     return `#${colorNum.toString(16).slice(2).toLocaleUpperCase()}`;
 }
-/** メッセージrun配列をMessageItem配列へ変換 */
+/** メッセージ runs → MessageItem[] */
 function parseMessages(runs) {
+    if (!runs || !Array.isArray(runs)) return [];
     try {
         return runs.map((run) => {
             if ("text" in run) {
                 return run;
             }
             else {
-                // Emoji
-                const thumbnail = run.emoji.image.thumbnails.shift();
-                const isCustomEmoji = Boolean(run.emoji.isCustomEmoji);
-                const shortcut = run.emoji.shortcuts ? run.emoji.shortcuts[0] : "";
+                // Emoji (null 가드 추가)
+                const emoji = run.emoji;
+                if (!emoji || !emoji.image || !emoji.image.thumbnails) {
+                    return { text: "" };
+                }
+                const thumbnails = emoji.image.thumbnails;
+                const thumbnail = thumbnails.length > 0 ? thumbnails[0] : null;
+                const isCustomEmoji = Boolean(emoji.isCustomEmoji);
+                const shortcut = emoji.shortcuts ? emoji.shortcuts[0] : "";
                 return {
                     url: thumbnail ? thumbnail.url : "",
                     alt: shortcut,
                     isCustomEmoji: isCustomEmoji,
-                    emojiText: isCustomEmoji ? shortcut : run.emoji.emojiId,
+                    emojiText: isCustomEmoji ? shortcut : (emoji.emojiId || ""),
                 };
             }
         });
@@ -108,12 +152,13 @@ function parseMessages(runs) {
         return [];
     }
 }
-/** actionの種類を判別してRendererを返す */
+/** action → Renderer */
 function rendererFromAction(action) {
     if (!action.addChatItemAction) {
         return null;
     }
     const item = action.addChatItemAction.item;
+    if (!item) return null;
     if (item.liveChatTextMessageRenderer) {
         return item.liveChatTextMessageRenderer;
     }
@@ -128,27 +173,29 @@ function rendererFromAction(action) {
     }
     return null;
 }
-/** an action to a ChatItem */
+/** action → ChatItem */
 function parseActionToChatItem(data) {
-    var _a, _b, _c;
+    var _a, _b, _c, _d, _e, _f, _g;
     const messageRenderer = rendererFromAction(data);
     if (messageRenderer === null) {
         return null;
     }
     let message = [];
-    if ("message" in messageRenderer) {
+    if ("message" in messageRenderer && ((_a = messageRenderer.message) === null || _a === void 0 ? void 0 : _a.runs)) {
         message = messageRenderer.message.runs;
     }
-    else if ("headerSubtext" in messageRenderer) {
+    else if ("headerSubtext" in messageRenderer && ((_b = messageRenderer.headerSubtext) === null || _b === void 0 ? void 0 : _b.runs)) {
         message = messageRenderer.headerSubtext.runs;
     }
-    const authorNameText = (_b = (_a = messageRenderer.authorName) === null || _a === void 0 ? void 0 : _a.simpleText) !== null && _b !== void 0 ? _b : "";
+    const authorNameText = ((_d = (_c = messageRenderer.authorName) === null || _c === void 0 ? void 0 : _c.simpleText) !== null && _d !== void 0 ? _d : "");
+    // authorPhoto 가드
+    const authorThumbnails = ((_e = messageRenderer.authorPhoto) === null || _e === void 0 ? void 0 : _e.thumbnails) || [];
     const ret = {
         id: messageRenderer.id,
         author: {
             name: authorNameText,
-            thumbnail: parseThumbnailToImageItem(messageRenderer.authorPhoto.thumbnails, authorNameText),
-            channelId: messageRenderer.authorExternalChannelId,
+            thumbnail: parseThumbnailToImageItem(authorThumbnails, authorNameText),
+            channelId: messageRenderer.authorExternalChannelId || "",
         },
         message: parseMessages(message),
         isMembership: false,
@@ -160,15 +207,16 @@ function parseActionToChatItem(data) {
     if (messageRenderer.authorBadges) {
         for (const entry of messageRenderer.authorBadges) {
             const badge = entry.liveChatAuthorBadgeRenderer;
+            if (!badge) continue;
             if (badge.customThumbnail) {
                 ret.author.badge = {
-                    thumbnail: parseThumbnailToImageItem(badge.customThumbnail.thumbnails, badge.tooltip),
-                    label: badge.tooltip,
+                    thumbnail: parseThumbnailToImageItem(badge.customThumbnail.thumbnails || [], badge.tooltip || ""),
+                    label: badge.tooltip || "",
                 };
                 ret.isMembership = true;
             }
             else {
-                switch ((_c = badge.icon) === null || _c === void 0 ? void 0 : _c.iconType) {
+                switch ((_f = badge.icon) === null || _f === void 0 ? void 0 : _f.iconType) {
                     case "OWNER":
                         ret.isOwner = true;
                         break;
@@ -182,14 +230,17 @@ function parseActionToChatItem(data) {
             }
         }
     }
-    if ("sticker" in messageRenderer) {
+    if ("sticker" in messageRenderer && messageRenderer.sticker) {
+        const stickerLabel = ((_g = messageRenderer.sticker.accessibility) === null || _g === void 0 ? void 0 : _g.accessibilityData)
+            ? messageRenderer.sticker.accessibility.accessibilityData.label
+            : "";
         ret.superchat = {
-            amount: messageRenderer.purchaseAmountText.simpleText,
+            amount: messageRenderer.purchaseAmountText ? messageRenderer.purchaseAmountText.simpleText : "",
             color: convertColorToHex6(messageRenderer.backgroundColor),
-            sticker: parseThumbnailToImageItem(messageRenderer.sticker.thumbnails, messageRenderer.sticker.accessibility.accessibilityData.label),
+            sticker: parseThumbnailToImageItem(messageRenderer.sticker.thumbnails || [], stickerLabel),
         };
     }
-    else if ("purchaseAmountText" in messageRenderer) {
+    else if ("purchaseAmountText" in messageRenderer && messageRenderer.purchaseAmountText) {
         ret.superchat = {
             amount: messageRenderer.purchaseAmountText.simpleText,
             color: convertColorToHex6(messageRenderer.bodyBackgroundColor),
@@ -197,4 +248,3 @@ function parseActionToChatItem(data) {
     }
     return ret;
 }
-//# sourceMappingURL=parser.js.map

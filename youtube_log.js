@@ -8,6 +8,7 @@ const zlib = require("zlib");
 const mecab = require('./mecab-ya.js');
 
 const DATA_FILE = './data.json';
+const BUFFER_FILE = './db_buffer.ndjson';
 
 const app = express();
 const PORT = 3000;
@@ -20,11 +21,11 @@ const DB_SCHEMA = "DATA";
 // ─── DB 타임아웃 설정 ───
 const DB_CONNECT_TIMEOUT = 60000;   // 풀에서 커넥션 얻기 타임아웃 (ms)
 const DB_QUERY_TIMEOUT = 60000;    // 개별 쿼리 타임아웃 (ms)
-const DB_HEALTH_INTERVAL = 60000;   // 헬스체크 간격 (ms)
-const DB_BUFFER_LIMIT = 50000;     // 버퍼 최대 크기 (이 이상이면 오래된 항목 버림)
+const DB_HEALTH_INTERVAL = 5000;   // 헬스체크 간격 (ms)
+const DB_BUFFER_LIMIT = 100000;     // 버퍼 최대 크기 (이 이상이면 오래된 항목 버림)
 
 const yt = {};
-const dbBuffer = [];
+const dbBuffer = loadBufferFromFile();
 let dbConnected = false;
 let isFlushing = false;
 let poolVersion = 0;  // 풀 세대 추적: 오래된 에러가 새 풀 파괴 방지
@@ -51,6 +52,68 @@ function writeData(data) {
 
 function delay(ms) {
     return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+// ─── 버퍼 파일 로드 (시작 시) ───
+function loadBufferFromFile() {
+    try {
+        if (!fs.existsSync(BUFFER_FILE)) return [];
+        const content = fs.readFileSync(BUFFER_FILE, 'utf8').trim();
+        if (!content) return [];
+        const items = content.split('\n').map(line => {
+            try {
+                const obj = JSON.parse(line);
+                // message(압축 데이터)는 base64로 저장했으므로 Buffer로 복원
+                if (obj.message && typeof obj.message === 'string') {
+                    obj.message = Buffer.from(obj.message, 'base64');
+                }
+                if (obj.timestamp && typeof obj.timestamp === 'string') {
+                    obj.timestamp = new Date(obj.timestamp);
+                }
+                return obj;
+            } catch { return null; }
+        }).filter(Boolean);
+        console.log(`[Buffer] Loaded ${items.length} items from file`);
+        return items;
+    } catch (err) {
+        console.error('[Buffer] Failed to load buffer file:', err.message);
+        return [];
+    }
+}
+
+// ─── 버퍼 항목을 파일에 추가 (append) ───
+function appendBufferToFile(chatData) {
+    try {
+        const obj = { ...chatData };
+        // Buffer(압축 메시지)는 base64 문자열로 변환해서 저장
+        if (Buffer.isBuffer(obj.message)) {
+            obj.message = obj.message.toString('base64');
+        }
+        fs.appendFileSync(BUFFER_FILE, JSON.stringify(obj) + '\n');
+    } catch (err) {
+        console.error('[Buffer] Failed to append to file:', err.message);
+    }
+}
+
+// ─── 버퍼 파일을 현재 dbBuffer 상태로 덮어쓰기 ───
+function syncBufferFile() {
+    try {
+        if (dbBuffer.length === 0) {
+            // 버퍼 비었으면 파일 삭제
+            if (fs.existsSync(BUFFER_FILE)) fs.unlinkSync(BUFFER_FILE);
+            return;
+        }
+        const lines = dbBuffer.map(item => {
+            const obj = { ...item };
+            if (Buffer.isBuffer(obj.message)) {
+                obj.message = obj.message.toString('base64');
+            }
+            return JSON.stringify(obj);
+        });
+        fs.writeFileSync(BUFFER_FILE, lines.join('\n') + '\n');
+    } catch (err) {
+        console.error('[Buffer] Failed to sync buffer file:', err.message);
+    }
 }
 
 function youtube_flag(e) {
@@ -157,18 +220,43 @@ function makePool(label, connLimit) {
     return p;
 }
 
-function destroyPool(p) {
-    if (p) p.end().catch(() => { });
+async function destroyPool(p) {
+    if (!p) return;
+    try {
+        // 모든 활성 연결 강제 종료
+        const pool = p.pool || p;
+        if (pool._freeConnections) {
+            for (const conn of pool._freeConnections.toArray()) {
+                try { conn.destroy(); } catch {}
+            }
+        }
+        if (pool._allConnections) {
+            for (const conn of pool._allConnections.toArray()) {
+                try { conn.destroy(); } catch {}
+            }
+        }
+        await p.end().catch(() => {});
+    } catch {
+        // 무시
+    }
 }
 
-function createPools() {
-    // 이전 풀 정리 (좀비 연결 방지)
+let isCreatingPools = false;
+
+async function createPools() {
+    if (isCreatingPools) return;
+    isCreatingPools = true;
+
+    // 즉시 연결 끊김 상태로 전환 (새 풀 준비 전까지 버퍼에 저장)
+    dbConnected = false;
+
+    // 이전 풀 완전 파괴
     const oldWrite = writePool;
     const oldRead = readPool;
     writePool = null;
     readPool = null;
-    destroyPool(oldWrite);
-    destroyPool(oldRead);
+    await destroyPool(oldWrite);
+    await destroyPool(oldRead);
 
     poolVersion++;
     const myVersion = poolVersion;
@@ -176,32 +264,32 @@ function createPools() {
     writePool = makePool('Write', 8);
     readPool = makePool('Read', 4);
 
-    // dbConnected는 연결 검증 후에만 true로 설정
-    getConnectionWithTimeout(writePool, DB_CONNECT_TIMEOUT)
-        .then(async (conn) => {
-            // 이 사이에 새 풀이 생성됐으면 무시
-            if (poolVersion !== myVersion) {
-                conn.release();
-                return;
-            }
-            try {
-                await ensureIndexes(conn);
-            } finally {
-                conn.release();
-            }
-            dbConnected = true;
-            console.log(`[DB] Connected (v${myVersion})`);
-            if (dbBuffer.length > 0) {
-                console.log(`[DB] Flushing ${dbBuffer.length} buffered items...`);
-                flushDbBuffer();
-            }
-        })
-        .catch(err => {
-            console.error(`[DB] Initial connection failed (v${myVersion}): ${err.message}`);
-            if (poolVersion === myVersion) {
-                dbConnected = false;
-            }
-        });
+    try {
+        const conn = await getConnectionWithTimeout(writePool, DB_CONNECT_TIMEOUT);
+        // 이 사이에 새 풀이 생성됐으면 무시
+        if (poolVersion !== myVersion) {
+            conn.release();
+            return;
+        }
+        try {
+            await ensureIndexes(conn);
+        } finally {
+            conn.release();
+        }
+        dbConnected = true;
+        console.log(`[DB] Connected (v${myVersion})`);
+        if (dbBuffer.length > 0) {
+            console.log(`[DB] Flushing ${dbBuffer.length} buffered items...`);
+            flushDbBuffer();
+        }
+    } catch (err) {
+        console.error(`[DB] Initial connection failed (v${myVersion}): ${err.message}`);
+        if (poolVersion === myVersion) {
+            dbConnected = false;
+        }
+    } finally {
+        isCreatingPools = false;
+    }
 }
 
 // ─── 풀 버전 체크 후 연결 끊김 상태로 전환 ───
@@ -302,6 +390,8 @@ async function flushDbBuffer() {
     }
 
     isFlushing = false;
+    // flush 후 파일을 남은 버퍼와 동기화
+    syncBufferFile();
     if (dbBuffer.length === 0) {
         console.log('[Buffer] All buffered items flushed successfully.');
     } else {
@@ -334,10 +424,12 @@ async function savedataDB(chatData) {
 // ─── 버퍼 크기 제한 ───
 function bufferPush(chatData) {
     dbBuffer.push(chatData);
+    appendBufferToFile(chatData);
     // 버퍼가 너무 커지면 오래된 항목부터 버림 (메모리 보호)
     if (dbBuffer.length > DB_BUFFER_LIMIT) {
         const dropped = dbBuffer.length - DB_BUFFER_LIMIT;
         dbBuffer.splice(0, dropped);
+        syncBufferFile();
         console.warn(`[Buffer] Overflow, dropped ${dropped} oldest items (limit: ${DB_BUFFER_LIMIT})`);
     }
     // 로그 스팸 방지: 100개 단위로만 출력
@@ -428,9 +520,14 @@ async function createLive(id, reset) {
 
     liveChat.on("error", (err) => {
         const msg = err?.message || '';
-        if (msg.includes("was not found")) {
+        // 방송 자체가 없을 때만 삭제 (파싱 에러는 무시)
+        if (msg === "Live Stream was not found") {
             deleteLive(id);
             console.log("[YT] Not found, deleted:", id);
+            return;
+        }
+        // 파싱/재접속 관련 에러는 live-chat.js 내부에서 처리하므로 무시
+        if (msg.includes("was not found") || msg.includes("liveChatContinuation")) {
             return;
         }
         if (err.status == 400 || err.status == 403) {
@@ -654,7 +751,7 @@ process.on('unhandledRejection', (reason) => {
 });
 
 (async () => {
-    createPools();  // DB 풀 초기화 (쓰기/읽기 분리)
+    await createPools();  // DB 연결 완료까지 대기
     const data = readData();
     for (let i = 0; i < data.length; ++i) {
         await createLive(data[i].id, true);
@@ -675,7 +772,7 @@ process.on('unhandledRejection', (reason) => {
             }
         } else if (!dbConnected) {
             console.log(`[DB] Health check: reconnecting... (${dbBuffer.length} buffered)`);
-            createPools();
+            await createPools();
         }
     }, DB_HEALTH_INTERVAL);
 })();

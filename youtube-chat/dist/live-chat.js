@@ -8,18 +8,6 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
         step((generator = generator.apply(thisArg, _arguments || [])).next());
     });
 };
-var __classPrivateFieldSet = (this && this.__classPrivateFieldSet) || function (receiver, state, value, kind, f) {
-    if (kind === "m") throw new TypeError("Private method is not writable");
-    if (kind === "a" && !f) throw new TypeError("Private accessor was defined without a setter");
-    if (typeof state === "function" ? receiver !== state || !f : !state.has(receiver)) throw new TypeError("Cannot write private member to an object whose class did not declare it");
-    return (kind === "a" ? f.call(receiver, value) : f ? f.value = value : state.set(receiver, value)), value;
-};
-var __classPrivateFieldGet = (this && this.__classPrivateFieldGet) || function (receiver, state, kind, f) {
-    if (kind === "a" && !f) throw new TypeError("Private accessor was defined without a getter");
-    if (typeof state === "function" ? receiver !== state || !f : !state.has(receiver)) throw new TypeError("Cannot read private member from an object whose class did not declare it");
-    return kind === "m" ? f : kind === "a" ? f.call(receiver) : f ? f.value : state.get(receiver);
-};
-var _LiveChat_instances, _LiveChat_observer, _LiveChat_options, _LiveChat_interval, _LiveChat_id, _LiveChat_retryCount, _LiveChat_maxRetries, _LiveChat_isReconnecting, _LiveChat_execute, _LiveChat_isNetworkError, _LiveChat_reconnect;
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.LiveChat = void 0;
 const events_1 = require("events");
@@ -29,126 +17,166 @@ const NETWORK_ERROR_CODES = [
     'ECONNRESET', 'ECONNABORTED', 'ERR_NETWORK', 'EAI_AGAIN'
 ];
 /**
- * YouTubeライブチャット取得イベント
  */
 class LiveChat extends events_1.EventEmitter {
     constructor(id, interval = 1000) {
         super();
-        _LiveChat_instances.add(this);
-        _LiveChat_observer.set(this, void 0);
-        _LiveChat_options.set(this, void 0);
-        _LiveChat_interval.set(this, 1000);
-        _LiveChat_id.set(this, void 0);
-        _LiveChat_retryCount.set(this, 0);
-        _LiveChat_maxRetries.set(this, 10);
-        _LiveChat_isReconnecting.set(this, false);
+        this._observer = null;
+        this._options = null;
+        this._interval = interval;
+        this._id = null;
+        this._isReconnecting = false;
+        this._continuationErrorCount = 0;
+        this._maxContinuationErrors = 3;
+        this._stopped = false;  // stop() 호출 여부 추적
+        this._executing = false; // execute 동시 실행 방지
         if (!id || (!("channelId" in id) && !("liveId" in id) && !("handle" in id))) {
             throw TypeError("Required channelId or liveId or handle.");
         }
-        else if ("liveId" in id) {
+        if ("liveId" in id) {
             this.liveId = id.liveId;
         }
-        __classPrivateFieldSet(this, _LiveChat_id, id, "f");
-        __classPrivateFieldSet(this, _LiveChat_interval, interval, "f");
+        this._id = id;
     }
     start() {
         return __awaiter(this, void 0, void 0, function* () {
-            if (__classPrivateFieldGet(this, _LiveChat_observer, "f")) {
+            if (this._observer) {
                 return false;
             }
-            try {
-                const options = yield (0, requests_1.fetchLivePage)(__classPrivateFieldGet(this, _LiveChat_id, "f"));
-                this.liveId = options.liveId;
-                __classPrivateFieldSet(this, _LiveChat_options, options, "f");
-                __classPrivateFieldSet(this, _LiveChat_observer, setInterval(() => __classPrivateFieldGet(this, _LiveChat_instances, "m", _LiveChat_execute).call(this), __classPrivateFieldGet(this, _LiveChat_interval, "f")), "f");
-                this.emit("start", this.liveId);
-                return true;
+            this._stopped = false;
+            const maxStartRetries = 5;
+            for (let attempt = 0; attempt < maxStartRetries; attempt++) {
+                if (this._stopped) return false;
+                try {
+                    const options = yield (0, requests_1.fetchLivePage)(this._id);
+                    this.liveId = options.liveId;
+                    this._options = options;
+                    this._observer = setInterval(() => this._execute(), this._interval);
+                    this.emit("start", this.liveId);
+                    return true;
+                }
+                catch (err) {
+                    this.emit("error", err);
+                    // 방송 종료/없음 에러는 재시도 안 함
+                    const msg = (err && err.message) || "";
+                    if (msg.includes("finished live") || msg.includes("Live Stream was not found")) {
+                        return false;
+                    }
+                    if (attempt < maxStartRetries - 1) {
+                        const backoff = Math.min(2000 * Math.pow(2, attempt), 16000);
+                        this.emit("reconnect", { attempt: attempt + 1, maxAttempts: maxStartRetries, nextRetryMs: backoff });
+                        yield new Promise(resolve => setTimeout(resolve, backoff));
+                    }
+                }
             }
-            catch (err) {
-                this.emit("error", err);
-                return false;
-            }
+            this.emit("error", new Error("start() failed after " + maxStartRetries + " retries"));
+            return false;
         });
     }
     stop(reason) {
-        if (__classPrivateFieldGet(this, _LiveChat_observer, "f")) {
-            clearInterval(__classPrivateFieldGet(this, _LiveChat_observer, "f"));
-            __classPrivateFieldSet(this, _LiveChat_observer, undefined, "f");
+        this._stopped = true;
+        this._isReconnecting = false;  // reconnect 루프도 중단
+        if (this._observer) {
+            clearInterval(this._observer);
+            this._observer = null;
             this.emit("end", reason);
         }
     }
-}
-exports.LiveChat = LiveChat;
-_LiveChat_observer = new WeakMap(), _LiveChat_options = new WeakMap(), _LiveChat_interval = new WeakMap(), _LiveChat_id = new WeakMap(), _LiveChat_retryCount = new WeakMap(), _LiveChat_maxRetries = new WeakMap(), _LiveChat_isReconnecting = new WeakMap(), _LiveChat_instances = new WeakSet(), _LiveChat_isNetworkError = function _LiveChat_isNetworkError(err) {
-    if (!err)
+    _isNetworkError(err) {
+        if (!err) return false;
+        const code = err.code || '';
+        const message = (err.message || '').toLowerCase();
+        if (NETWORK_ERROR_CODES.includes(code)) return true;
+        if (message.includes('network') || message.includes('timeout') ||
+            message.includes('socket hang up') || message.includes('getaddrinfo')) return true;
+        if (err.response === undefined && err.request) return true;
         return false;
-    const code = err.code || '';
-    const message = (err.message || '').toLowerCase();
-    if (NETWORK_ERROR_CODES.includes(code))
-        return true;
-    if (message.includes('network') || message.includes('timeout') || message.includes('socket hang up') || message.includes('getaddrinfo'))
-        return true;
-    if (err.response === undefined && err.request)
-        return true;
-    return false;
-}, _LiveChat_reconnect = function _LiveChat_reconnect() {
-    return __awaiter(this, void 0, void 0, function* () {
-        if (__classPrivateFieldGet(this, _LiveChat_isReconnecting, "f"))
-            return;
-        __classPrivateFieldSet(this, _LiveChat_isReconnecting, true, "f");
-        // 기존 polling 중지
-        if (__classPrivateFieldGet(this, _LiveChat_observer, "f")) {
-            clearInterval(__classPrivateFieldGet(this, _LiveChat_observer, "f"));
-            __classPrivateFieldSet(this, _LiveChat_observer, undefined, "f");
-        }
-        while (__classPrivateFieldGet(this, _LiveChat_retryCount, "f") < __classPrivateFieldGet(this, _LiveChat_maxRetries, "f")) {
-            const attempt = __classPrivateFieldGet(this, _LiveChat_retryCount, "f") + 1;
-            const backoff = Math.min(2000 * Math.pow(2, __classPrivateFieldGet(this, _LiveChat_retryCount, "f")), 32000);
-            this.emit("reconnect", { attempt, maxAttempts: __classPrivateFieldGet(this, _LiveChat_maxRetries, "f"), nextRetryMs: backoff });
-            yield new Promise(resolve => setTimeout(resolve, backoff));
+    }
+    _reconnect() {
+        return __awaiter(this, void 0, void 0, function* () {
+            if (this._isReconnecting) return;
+            this._isReconnecting = true;
+            // 기존 polling 중지
+            if (this._observer) {
+                clearInterval(this._observer);
+                this._observer = null;
+            }
+            const FATAL_MESSAGES = ["finished live", "Live Stream was not found"];
+            let retryCount = 0;
+            while (!this._stopped) {
+                retryCount++;
+                const backoff = Math.min(3000 * Math.pow(2, Math.min(retryCount - 1, 5)), 60000);
+                this.emit("reconnect", { attempt: retryCount, nextRetryMs: backoff });
+                yield new Promise(resolve => setTimeout(resolve, backoff));
+                if (this._stopped) break;
+                try {
+                    const options = yield (0, requests_1.fetchLivePage)(this._id);
+                    this.liveId = options.liveId;
+                    this._options = options;
+                    this._isReconnecting = false;
+                    this._continuationErrorCount = 0;
+                    this._observer = setInterval(() => this._execute(), this._interval);
+                    this.emit("start", this.liveId);
+                    return;
+                }
+                catch (err) {
+                    const msg = (err && err.message) || "";
+                    // 방송 종료/없음 → 완전 중단
+                    if (FATAL_MESSAGES.some(f => msg.includes(f))) {
+                        this._isReconnecting = false;
+                        this.emit("end", msg);
+                        return;
+                    }
+                    // 파싱 에러(Client Version, API Key, Continuation 등)는 조용히 재시도
+                }
+            }
+            this._isReconnecting = false;
+        });
+    }
+    _execute() {
+        return __awaiter(this, void 0, void 0, function* () {
+            if (this._isReconnecting || this._stopped) return;
+            if (this._executing) return;  // 이전 execute가 아직 실행 중이면 스킵
+            this._executing = true;
             try {
-                const options = yield (0, requests_1.fetchLivePage)(__classPrivateFieldGet(this, _LiveChat_id, "f"));
-                this.liveId = options.liveId;
-                __classPrivateFieldSet(this, _LiveChat_options, options, "f");
-                __classPrivateFieldSet(this, _LiveChat_retryCount, 0, "f");
-                __classPrivateFieldSet(this, _LiveChat_isReconnecting, false, "f");
-                __classPrivateFieldSet(this, _LiveChat_observer, setInterval(() => __classPrivateFieldGet(this, _LiveChat_instances, "m", _LiveChat_execute).call(this), __classPrivateFieldGet(this, _LiveChat_interval, "f")), "f");
-                this.emit("start", this.liveId);
-                return;
+                if (!this._options) {
+                    const message = "Not found options";
+                    this.emit("error", new Error(message));
+                    this.stop(message);
+                    return;
+                }
+                const [chatItems, continuation] = yield (0, requests_1.fetchChat)(this._options);
+                this._continuationErrorCount = 0;
+                chatItems.forEach((chatItem) => this.emit("chat", chatItem));
+                if (continuation) {
+                    this._options.continuation = continuation;
+                }
             }
             catch (err) {
-                __classPrivateFieldSet(this, _LiveChat_retryCount, __classPrivateFieldGet(this, _LiveChat_retryCount, "f") + 1, "f");
+                if (this._isNetworkError(err)) {
+                    this._reconnect();
+                    return;
+                }
+                // liveChatContinuation 에러 연속 발생 시 재접속 시도
+                if (err && err.code === "LIVE_CHAT_CONTINUATION_NOT_FOUND") {
+                    this._continuationErrorCount++;
+                    if (this._continuationErrorCount >= this._maxContinuationErrors) {
+                        this._continuationErrorCount = 0;
+                        this._reconnect();
+                    }
+                    return;
+                }
+                // HTTP 403/401 → YouTube가 차단, 재접속 시도
+                if (err && err.response && (err.response.status === 403 || err.response.status === 401)) {
+                    this._reconnect();
+                    return;
+                }
                 this.emit("error", err);
             }
-        }
-        // 최대 재시도 초과
-        __classPrivateFieldSet(this, _LiveChat_isReconnecting, false, "f");
-        __classPrivateFieldSet(this, _LiveChat_retryCount, 0, "f");
-        this.emit("end", "reconnect failed after max retries");
-    });
-}, _LiveChat_execute = function _LiveChat_execute() {
-    return __awaiter(this, void 0, void 0, function* () {
-        if (__classPrivateFieldGet(this, _LiveChat_isReconnecting, "f"))
-            return;
-        if (!__classPrivateFieldGet(this, _LiveChat_options, "f")) {
-            const message = "Not found options";
-            this.emit("error", new Error(message));
-            this.stop(message);
-            return;
-        }
-        try {
-            const [chatItems, continuation] = yield (0, requests_1.fetchChat)(__classPrivateFieldGet(this, _LiveChat_options, "f"));
-            __classPrivateFieldSet(this, _LiveChat_retryCount, 0, "f");
-            chatItems.forEach((chatItem) => this.emit("chat", chatItem));
-            __classPrivateFieldGet(this, _LiveChat_options, "f").continuation = continuation;
-        }
-        catch (err) {
-            if (__classPrivateFieldGet(this, _LiveChat_instances, "m", _LiveChat_isNetworkError).call(this, err)) {
-                __classPrivateFieldGet(this, _LiveChat_instances, "m", _LiveChat_reconnect).call(this);
-                return;
+            finally {
+                this._executing = false;
             }
-            this.emit("error", err);
-        }
-    });
-};
-//# sourceMappingURL=live-chat.js.map
+        });
+    }
+}
+exports.LiveChat = LiveChat;

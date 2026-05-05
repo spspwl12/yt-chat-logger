@@ -15,9 +15,13 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.fetchLivePage = exports.fetchChat = void 0;
 const axios_1 = __importDefault(require("axios"));
 const parser_1 = require("./parser");
+
+const REQUEST_TIMEOUT = 15000;  // 15초 타임아웃
+const USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36";
+
 function fetchChat(options) {
     return __awaiter(this, void 0, void 0, function* () {
-        const url = `https://www.youtube.com/youtubei/v1/live_chat/get_live_chat?key=${options.apiKey}`;
+        const url = `https://www.youtube.com/youtubei/v1/live_chat/get_live_chat?key=${encodeURIComponent(options.apiKey)}`;
         const res = yield axios_1.default.post(url, {
             context: {
                 client: {
@@ -26,6 +30,12 @@ function fetchChat(options) {
                 },
             },
             continuation: options.continuation,
+        }, {
+            timeout: REQUEST_TIMEOUT,
+            headers: {
+                "User-Agent": USER_AGENT,
+                "Accept-Language": "ko-KR,ko;q=0.9,en;q=0.8",
+            },
         });
         return (0, parser_1.parseChatData)(res.data);
     });
@@ -37,25 +47,30 @@ function fetchLivePage(id) {
         if (!url) {
             throw TypeError("not found id");
         }
-        const res = yield axios_1.default.get(url);
+        const res = yield axios_1.default.get(url, {
+            timeout: REQUEST_TIMEOUT,
+            headers: {
+                "User-Agent": USER_AGENT,
+                "Accept-Language": "ko-KR,ko;q=0.9,en;q=0.8",
+            },
+        });
         return (0, parser_1.getOptionsFromLivePage)(res.data.toString());
     });
 }
 exports.fetchLivePage = fetchLivePage;
 function generateLiveUrl(id) {
     if ("channelId" in id) {
-        return `https://www.youtube.com/channel/${id.channelId}/live`;
+        return `https://www.youtube.com/channel/${encodeURIComponent(id.channelId)}/live`;
     }
     else if ("liveId" in id) {
-        return `https://www.youtube.com/watch?v=${id.liveId}`;
+        return `https://www.youtube.com/watch?v=${encodeURIComponent(id.liveId)}`;
     }
     else if ("handle" in id) {
         let handle = id.handle;
         if (!handle.startsWith("@")) {
             handle = "@" + handle;
         }
-        return `https://www.youtube.com/${handle}/live`;
+        return `https://www.youtube.com/${encodeURIComponent(handle)}/live`;
     }
     return "";
 }
-//# sourceMappingURL=requests.js.map
