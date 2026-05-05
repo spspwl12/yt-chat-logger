@@ -17,11 +17,24 @@ const DB_USER = "root";
 const DB_PASS = "";
 const DB_SCHEMA = "DATA";
 
+// ─── DB 타임아웃 설정 ───
+const DB_CONNECT_TIMEOUT = 60000;   // 풀에서 커넥션 얻기 타임아웃 (ms)
+const DB_QUERY_TIMEOUT = 60000;    // 개별 쿼리 타임아웃 (ms)
+const DB_HEALTH_INTERVAL = 60000;   // 헬스체크 간격 (ms)
+const DB_BUFFER_LIMIT = 50000;     // 버퍼 최대 크기 (이 이상이면 오래된 항목 버림)
 
 const yt = {};
 const dbBuffer = [];
 let dbConnected = false;
 let isFlushing = false;
+let poolVersion = 0;  // 풀 세대 추적: 오래된 에러가 새 풀 파괴 방지
+
+// ─── 쓰기/읽기 풀 분리 ───
+// writePool: INSERT 전용 (채팅 저장, 버퍼 flush)
+// readPool:  SELECT 전용 (쿼리 엔드포인트)
+// → INSERT가 몰려도 SELECT가 독립적으로 동작
+let writePool = null;
+let readPool = null;
 
 // authorId -> { uid, profiles: Map<cacheKey, nid> }
 const userCache = new Map();
@@ -40,8 +53,6 @@ function delay(ms) {
     return new Promise(resolve => setTimeout(resolve, ms));
 }
 
-
-
 function youtube_flag(e) {
     let b = 0;
     if (e.isMembership) b |= 1;
@@ -56,7 +67,15 @@ function NVL(e) {
     return e ?? " ";
 }
 
-let pool = null;
+// ─── 에러 요약 유틸 ───
+function errSummary(err) {
+    if (!err) return 'unknown error';
+    const parts = [];
+    if (err.status) parts.push(`status=${err.status}`);
+    if (err.code) parts.push(`code=${err.code}`);
+    parts.push(err.message || 'no message');
+    return parts.join(' ');
+}
 
 const DB_CONN_ERROR_CODES = [
     'PROTOCOL_CONNECTION_LOST', 'ECONNRESET', 'ECONNREFUSED',
@@ -69,9 +88,29 @@ function isConnectionError(err) {
     const msg = (err.message || '').toLowerCase();
     if (DB_CONN_ERROR_CODES.includes(code)) return true;
     if (msg.includes('connection lost') || msg.includes('cannot enqueue') ||
-        msg.includes('connection closed') || msg.includes('socket hang up')) return true;
+        msg.includes('connection closed') || msg.includes('socket hang up') ||
+        msg.includes('timeout')) return true;
     if (err.fatal) return true;
     return false;
+}
+
+// ─── 타임아웃이 적용된 getConnection 래퍼 ───
+function getConnectionWithTimeout(thePool, timeoutMs) {
+    return new Promise((resolve, reject) => {
+        const timer = setTimeout(() => {
+            reject(new Error(`getConnection timeout (${timeoutMs}ms)`));
+        }, timeoutMs);
+
+        thePool.getConnection()
+            .then(conn => {
+                clearTimeout(timer);
+                resolve(conn);
+            })
+            .catch(err => {
+                clearTimeout(timer);
+                reject(err);
+            });
+    });
 }
 
 async function ensureIndexes(conn) {
@@ -100,42 +139,78 @@ async function ensureIndexes(conn) {
     }
 }
 
-function createPool() {
-    pool = mysql.createPool({
+// ─── 풀 생성 유틸 (쓰기/읽기 공통) ───
+function makePool(label, connLimit) {
+    const p = mysql.createPool({
         host: DB_HOST,
         user: DB_USER,
         password: DB_PASS,
         database: DB_SCHEMA,
         waitForConnections: true,
-        connectionLimit: 10,
+        connectionLimit: connLimit,
         queueLimit: 0,
         enableKeepAlive: true,
         keepAliveInitialDelay: 10000,
+        connectTimeout: DB_CONNECT_TIMEOUT,
     });
-    console.log('DB Pool created.');
-    dbConnected = true;
-
-    // 풀 생성 후 인덱스 확인 + 버퍼 flush
-    pool.getConnection().then(async (conn) => {
-        await ensureIndexes(conn);
-        conn.release();
-        if (dbBuffer.length > 0) {
-            console.log(`DB pool ready, flushing ${dbBuffer.length} buffered items...`);
-            flushDbBuffer();
-        }
-    }).catch(err => {
-        console.error('DB initial connection failed:', err.message);
-        dbConnected = false;
-    });
-
-    return pool;
+    console.log(`[DB] ${label} pool created (limit=${connLimit})`);
+    return p;
 }
 
-function connectDB() {
-    if (!pool) {
-        createPool();
+function destroyPool(p) {
+    if (p) p.end().catch(() => { });
+}
+
+function createPools() {
+    // 이전 풀 정리 (좀비 연결 방지)
+    const oldWrite = writePool;
+    const oldRead = readPool;
+    writePool = null;
+    readPool = null;
+    destroyPool(oldWrite);
+    destroyPool(oldRead);
+
+    poolVersion++;
+    const myVersion = poolVersion;
+
+    writePool = makePool('Write', 8);
+    readPool = makePool('Read', 4);
+
+    // dbConnected는 연결 검증 후에만 true로 설정
+    getConnectionWithTimeout(writePool, DB_CONNECT_TIMEOUT)
+        .then(async (conn) => {
+            // 이 사이에 새 풀이 생성됐으면 무시
+            if (poolVersion !== myVersion) {
+                conn.release();
+                return;
+            }
+            try {
+                await ensureIndexes(conn);
+            } finally {
+                conn.release();
+            }
+            dbConnected = true;
+            console.log(`[DB] Connected (v${myVersion})`);
+            if (dbBuffer.length > 0) {
+                console.log(`[DB] Flushing ${dbBuffer.length} buffered items...`);
+                flushDbBuffer();
+            }
+        })
+        .catch(err => {
+            console.error(`[DB] Initial connection failed (v${myVersion}): ${err.message}`);
+            if (poolVersion === myVersion) {
+                dbConnected = false;
+            }
+        });
+}
+
+// ─── 풀 버전 체크 후 연결 끊김 상태로 전환 ───
+function markDbDisconnected(callerVersion) {
+    // 현재 풀 버전과 호출자의 버전이 일치할 때만 상태 변경
+    // → 오래된 에러 콜백이 새로 생성된 풀을 파괴하는 것을 방지
+    if (poolVersion === callerVersion) {
+        dbConnected = false;
     }
-    return pool;
 }
 
 async function insertChat(thePool, chatData) {
@@ -148,7 +223,7 @@ async function insertChat(thePool, chatData) {
 
     // 캐시 미스 시에만 조회 쿼리 실행
     if (!userEntry || !nid) {
-        const conn = await thePool.getConnection();
+        const conn = await getConnectionWithTimeout(thePool, DB_CONNECT_TIMEOUT);
         try {
             if (!userEntry) {
                 await conn.execute(
@@ -197,14 +272,15 @@ async function insertChat(thePool, chatData) {
 }
 
 async function flushDbBuffer() {
-    if (isFlushing || dbBuffer.length === 0) return;
+    if (isFlushing || dbBuffer.length === 0 || !dbConnected) return;
     isFlushing = true;
-    console.log(`[Buffer] Flushing ${dbBuffer.length} items...`);
+    const flushVersion = poolVersion;  // flush 시작 시점의 풀 버전 기억
+    console.log(`[Buffer] Flushing ${dbBuffer.length} items (pool v${flushVersion})...`);
 
-    while (dbBuffer.length > 0 && dbConnected) {
+    while (dbBuffer.length > 0 && dbConnected && poolVersion === flushVersion) {
         const chatData = dbBuffer[0];
         try {
-            await insertChat(connectDB(), chatData);
+            await insertChat(writePool, chatData);
             dbBuffer.shift();
         } catch (err) {
             if (err && err.code === 'ER_DUP_ENTRY') {
@@ -213,8 +289,10 @@ async function flushDbBuffer() {
             }
             if (isConnectionError(err)) {
                 console.error('[Buffer] DB connection lost during flush, pausing...');
-                dbConnected = false;
-                pool = null;
+                // 현재 풀 버전이 같을 때만 상태 변경 (레이스 방지)
+                if (poolVersion === flushVersion) {
+                    dbConnected = false;
+                }
                 break;
             }
             // 기타 에러는 로그 후 건너뜀
@@ -233,26 +311,39 @@ async function flushDbBuffer() {
 
 async function savedataDB(chatData) {
     // DB 연결이 끊긴 상태면 버퍼에 저장
-    if (!dbConnected) {
-        dbBuffer.push(chatData);
-        console.log(`[Buffer] DB offline, buffered (${dbBuffer.length} items)`);
+    if (!dbConnected || !writePool) {
+        bufferPush(chatData);
         return;
     }
 
-    insertChat(connectDB(), chatData)
+    const myVersion = poolVersion;  // 이 시점의 풀 버전 캡처
+    insertChat(writePool, chatData)
         .catch((err) => {
             if (err && err.code === 'ER_DUP_ENTRY') return;
 
-            console.error('DB Insert Error:', err.message);
+            console.error('[DB] Insert error:', err.message);
 
-            // 연결 에러면 상태 변경 후 버퍼에 저장
+            // 연결 에러면 상태 변경 (버전 체크로 레이스 방지)
             if (isConnectionError(err)) {
-                dbConnected = false;
-                pool = null;
+                markDbDisconnected(myVersion);
             }
-            dbBuffer.push(chatData);
-            console.log(`[Buffer] Buffered (${dbBuffer.length} items)`);
+            bufferPush(chatData);
         });
+}
+
+// ─── 버퍼 크기 제한 ───
+function bufferPush(chatData) {
+    dbBuffer.push(chatData);
+    // 버퍼가 너무 커지면 오래된 항목부터 버림 (메모리 보호)
+    if (dbBuffer.length > DB_BUFFER_LIMIT) {
+        const dropped = dbBuffer.length - DB_BUFFER_LIMIT;
+        dbBuffer.splice(0, dropped);
+        console.warn(`[Buffer] Overflow, dropped ${dropped} oldest items (limit: ${DB_BUFFER_LIMIT})`);
+    }
+    // 로그 스팸 방지: 100개 단위로만 출력
+    if (dbBuffer.length <= 1 || dbBuffer.length % 100 === 0) {
+        console.log(`[Buffer] DB offline, buffered (${dbBuffer.length} items)`);
+    }
 }
 
 function tokMessage(text) {
@@ -299,7 +390,7 @@ async function createLive(id, reset) {
     yt[id].obj = liveChat;
 
     liveChat.on("start", (liveId) => {
-        console.log("Connected Youtube: ", id);
+        console.log("[YT] Connected:", id);
     });
 
     liveChat.on("chat", (chatItem) => {
@@ -317,7 +408,7 @@ async function createLive(id, reset) {
         // 비동기 압축으로 이벤트 루프 블로킹 방지
         zlib.deflateRaw(Buffer.from(msgJson, 'utf8'), (err, compressed) => {
             if (err) {
-                console.error('Compress error:', err.message);
+                console.error('[YT] Compress error:', err.message);
                 return;
             }
             savedataDB({
@@ -336,9 +427,10 @@ async function createLive(id, reset) {
     });
 
     liveChat.on("error", (err) => {
-        if (err.message.includes("was not found")) {
+        const msg = err?.message || '';
+        if (msg.includes("was not found")) {
             deleteLive(id);
-            console.log("Not Found Live ID /  Delete Youtube: ", id);
+            console.log("[YT] Not found, deleted:", id);
             return;
         }
         if (err.status == 400 || err.status == 403) {
@@ -346,20 +438,21 @@ async function createLive(id, reset) {
                 yt[id].obj && yt[id].obj.stop();
             }
         }
+        // 503(일시적 오류)은 무시, 나머지만 간략 출력
         if (err.status != 503) {
-            console.error("Error Youtube: ", id, err);
+            console.error(`[YT] Error ${id}: ${errSummary(err)}`);
         }
     });
 
     liveChat.on("end", (reason) => {
-        console.log("Disconnected Youtube: ", id, reason);
+        console.log("[YT] Disconnected:", id, reason);
         if (++yt[id].error < 5) {
             const err = yt[id].error;
             setTimeout(createLive, 1000 * (err * err), id, false);
-            console.log("Try Reconnect Youtube: ", id);
+            console.log("[YT] Reconnecting:", id, `(attempt ${err})`);
         } else {
             deleteLive(id);
-            console.log("Error Delete Youtube: ", id);
+            console.log("[YT] Max retries, deleted:", id);
         }
     });
 
@@ -480,11 +573,16 @@ async function queryChat(req, res, direction) {
                  )
                  ORDER BY c.timestamp ${order}, c.id ${order}`;
 
+    if (!readPool) {
+        console.error('[Query] Read pool not available');
+        return res.json([]);
+    }
+
     let conn;
     try {
-        conn = await connectDB().getConnection();
-        // 쿼리 타임아웃 10초
-        await conn.execute('SET SESSION MAX_EXECUTION_TIME=10000');
+        conn = await getConnectionWithTimeout(readPool, DB_CONNECT_TIMEOUT);
+        // 쿼리 타임아웃
+        await conn.execute(`SET SESSION MAX_EXECUTION_TIME=${DB_QUERY_TIMEOUT}`);
         const [rows] = await conn.execute(sql, idParams);
         const result = rows.map(row => ({
             id: row.id,
@@ -499,7 +597,10 @@ async function queryChat(req, res, direction) {
         }));
         res.json(result);
     } catch (err) {
-        console.error("Query error:", err.message);
+        console.error('[Query] error:', err.message);
+        if (isConnectionError(err)) {
+            markDbDisconnected(poolVersion);
+        }
         res.json([]);
     } finally {
         if (conn) conn.release();
@@ -510,9 +611,13 @@ app.get('/api/user_history/:authorId', async (req, res) => {
     const authorId = req.params.authorId;
     if (!authorId) return res.status(400).json({ error: 'authorId is required' });
 
+    if (!readPool) {
+        return res.status(503).json({ error: 'Database unavailable' });
+    }
+
     let conn;
     try {
-        conn = await connectDB().getConnection();
+        conn = await getConnectionWithTimeout(readPool, DB_CONNECT_TIMEOUT);
         const sql = `
             SELECT n.author, n.thumb, n.first_seen
             FROM youtube_user_names n
@@ -523,7 +628,10 @@ app.get('/api/user_history/:authorId', async (req, res) => {
         const [rows] = await conn.execute(sql, [authorId]);
         res.json(rows);
     } catch (err) {
-        console.error("User history query error:", err.message);
+        console.error('[Query] User history error:', err.message);
+        if (isConnectionError(err)) {
+            markDbDisconnected(poolVersion);
+        }
         res.status(500).json({ error: 'Database error' });
     } finally {
         if (conn) conn.release();
@@ -537,17 +645,37 @@ app.listen(PORT, () => {
     console.log(`Enter url: http://localhost:${PORT}`);
 });
 
+// ─── 프로세스 안정성: 예외로 인한 크래시 방지 ───
+process.on('uncaughtException', (err) => {
+    console.error('[FATAL] Uncaught exception:', err.message);
+});
+process.on('unhandledRejection', (reason) => {
+    console.error('[FATAL] Unhandled rejection:', reason?.message || reason);
+});
+
 (async () => {
+    createPools();  // DB 풀 초기화 (쓰기/읽기 분리)
     const data = readData();
     for (let i = 0; i < data.length; ++i) {
         await createLive(data[i].id, true);
     }
-    // DB 연결 끊김 시 주기적으로 재연결 시도 및 버퍼 flush
-    setInterval(() => {
-        if (!dbConnected && dbBuffer.length > 0) {
-            console.log(`[Buffer] Attempting DB reconnect (${dbBuffer.length} items buffered)...`);
-            pool = null;
-            connectDB(); // 풀 재생성 시 자동으로 flushDbBuffer 호출
+
+    // ─── 헬스체크: DB 연결 끊김 시 자동 재연결 ───
+    // 버퍼 유무 관계없이 동작 (쿼리 엔드포인트 복구 포함)
+    setInterval(async () => {
+        if (dbConnected && writePool) {
+            // 연결 상태에서도 주기적으로 ping 체크 (조용한 끊김 감지)
+            try {
+                const conn = await getConnectionWithTimeout(writePool, DB_CONNECT_TIMEOUT);
+                await conn.ping();
+                conn.release();
+            } catch (err) {
+                console.error(`[DB] Health ping failed: ${err.message}`);
+                markDbDisconnected(poolVersion);
+            }
+        } else if (!dbConnected) {
+            console.log(`[DB] Health check: reconnecting... (${dbBuffer.length} buffered)`);
+            createPools();
         }
-    }, 5000);
+    }, DB_HEALTH_INTERVAL);
 })();

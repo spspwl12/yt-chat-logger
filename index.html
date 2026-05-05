@@ -423,6 +423,10 @@
             align-items: center;
         }
 
+        #historyModalOverlay {
+            z-index: 31000;
+        }
+
         .history-modal {
             background: #212121;
             border: 1px solid #3d3d3d;
@@ -1101,15 +1105,14 @@
             }
         });
 
-        contextMenuHistory.addEventListener('click', async () => {
-            contextMenu.style.display = 'none';
-            if (!currentContextAuthorId) return;
+        async function openHistoryModal(authorId) {
+            if (!authorId) return;
 
             historyModalOverlay.style.display = 'flex';
             historyModalContent.innerHTML = '<div class="loading"><div class="spinner"></div> 로딩중...</div>';
 
             try {
-                const res = await fetch('/api/user_history/' + encodeURIComponent(currentContextAuthorId));
+                const res = await fetch('/api/user_history/' + encodeURIComponent(authorId));
                 const data = await res.json();
                 
                 if (!data || data.length === 0) {
@@ -1134,6 +1137,11 @@
             } catch (err) {
                 historyModalContent.innerHTML = '<div class="empty">불러오기 실패</div>';
             }
+        }
+
+        contextMenuHistory.addEventListener('click', () => {
+            contextMenu.style.display = 'none';
+            openHistoryModal(currentContextAuthorId);
         });
 
         historyModalClose.addEventListener('click', () => {
@@ -1257,7 +1265,7 @@
                                 <div class="user-info">
                                     <h3>
                                         <span class="rank-badge ${rankClass}">#${idx + 1}</span>
-                                        ${esc(r.authorName || 'Unknown User')}
+                                        <span class="scan-username" style="cursor: pointer; text-decoration: underline;" data-user="${esc(r.authorId)}">${esc(r.authorName || 'Unknown User')}</span>
                                     </h3>
                                     <div class="user-id">${esc(r.authorId)} &middot; ${r.msgCount} msgs</div>
                                 </div>
@@ -1302,6 +1310,12 @@
                                 ${interestHTML}
                             </div>
                         `;
+                        const usernameEl = card.querySelector('.scan-username');
+                        if (usernameEl) {
+                            usernameEl.addEventListener('click', () => {
+                                openHistoryModal(usernameEl.getAttribute('data-user'));
+                            });
+                        }
                         deepScanResults.appendChild(card);
                     });
                 }
