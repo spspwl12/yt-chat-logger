@@ -467,6 +467,7 @@
 
         .weight-slider-item.interest input[type="range"]::-webkit-slider-thumb { background: var(--interest); }
         .weight-slider-item.rare input[type="range"]::-webkit-slider-thumb { background: #f97316; }
+        .weight-slider-item.sig input[type="range"]::-webkit-slider-thumb { background: var(--accent); }
     </style>
 </head>
 <body>
@@ -504,8 +505,12 @@
                     <input type="range" id="wiSlider" min="0" max="100" value="30" oninput="updateWeightLabel()">
                 </div>
                 <div class="weight-slider-item rare">
-                    <label>🔥 희귀용어 <span class="wval" id="wrLabel">30%</span></label>
-                    <input type="range" id="wrSlider" min="0" max="100" value="30" oninput="updateWeightLabel()">
+                    <label>🔥 희귀용어 <span class="wval" id="wrLabel">20%</span></label>
+                    <input type="range" id="wrSlider" min="0" max="100" value="20" oninput="updateWeightLabel()">
+                </div>
+                <div class="weight-slider-item sig">
+                    <label>📝 서명 <span class="wval" id="wdLabel">25%</span></label>
+                    <input type="range" id="wdSlider" min="0" max="100" value="25" oninput="updateWeightLabel()">
                 </div>
             </div>
         </div>
@@ -574,6 +579,7 @@
             document.getElementById('wsLabel').textContent = document.getElementById('wsSlider').value + '%';
             document.getElementById('wiLabel').textContent = document.getElementById('wiSlider').value + '%';
             document.getElementById('wrLabel').textContent = document.getElementById('wrSlider').value + '%';
+            document.getElementById('wdLabel').textContent = document.getElementById('wdSlider').value + '%';
         }
 
         async function analyze() {
@@ -593,7 +599,8 @@
                 const ws = parseInt(document.getElementById('wsSlider').value) / 100;
                 const wi = parseInt(document.getElementById('wiSlider').value) / 100;
                 const wr = parseInt(document.getElementById('wrSlider').value) / 100;
-                const res = await fetch(`/api/analyze?target=${encodeURIComponent(target)}&ws=${ws}&wi=${wi}&wr=${wr}`);
+                const wd = parseInt(document.getElementById('wdSlider').value) / 100;
+                const res = await fetch(`/api/analyze?target=${encodeURIComponent(target)}&ws=${ws}&wi=${wi}&wr=${wr}&wd=${wd}`);
                 const data = await res.json();
                 const endT = performance.now();
 
