@@ -556,7 +556,6 @@
         }
         .weight-slider-item.interest input[type="range"]::-webkit-slider-thumb { background: #10b981; }
         .weight-slider-item.rare input[type="range"]::-webkit-slider-thumb { background: #f97316; }
-        .weight-slider-item.sig input[type="range"]::-webkit-slider-thumb { background: #8b5cf6; }
 
         .deepscan-btn {
             background: #3b82f6; color: white; border: none; padding: 10px;
@@ -661,12 +660,8 @@
                         <input type="range" id="dsWiSlider" min="0" max="100" value="30">
                     </div>
                     <div class="weight-slider-item rare">
-                        <label>🔥 희귀 <span class="wval" id="dsWrLabel">20%</span></label>
-                        <input type="range" id="dsWrSlider" min="0" max="100" value="20">
-                    </div>
-                    <div class="weight-slider-item sig">
-                        <label>📝 서명 <span class="wval" id="dsWdLabel">25%</span></label>
-                        <input type="range" id="dsWdSlider" min="0" max="100" value="25">
+                        <label>🔥 희귀 <span class="wval" id="dsWrLabel">30%</span></label>
+                        <input type="range" id="dsWrSlider" min="0" max="100" value="30">
                     </div>
                 </div>
                 <button class="deepscan-btn" id="deepScanBtn">Scan Now</button>
@@ -693,11 +688,9 @@
         const dsWsSlider = document.getElementById('dsWsSlider');
         const dsWiSlider = document.getElementById('dsWiSlider');
         const dsWrSlider = document.getElementById('dsWrSlider');
-        const dsWdSlider = document.getElementById('dsWdSlider');
         const dsWsLabel = document.getElementById('dsWsLabel');
         const dsWiLabel = document.getElementById('dsWiLabel');
         const dsWrLabel = document.getElementById('dsWrLabel');
-        const dsWdLabel = document.getElementById('dsWdLabel');
         const deepScanBtn = document.getElementById('deepScanBtn');
         const deepScanResults = document.getElementById('deepScanResults');
         let currentContextAuthorId = null;
@@ -1168,26 +1161,22 @@
             dsWsLabel.textContent = dsWsSlider.value + '%';
             dsWiLabel.textContent = dsWiSlider.value + '%';
             dsWrLabel.textContent = dsWrSlider.value + '%';
-            dsWdLabel.textContent = dsWdSlider.value + '%';
             
             // Save to localStorage
             localStorage.setItem('ds_weight_style', dsWsSlider.value);
             localStorage.setItem('ds_weight_interest', dsWiSlider.value);
             localStorage.setItem('ds_weight_rare', dsWrSlider.value);
-            localStorage.setItem('ds_weight_sig', dsWdSlider.value);
         }
         
         // Load from localStorage if exists
         if (localStorage.getItem('ds_weight_style')) dsWsSlider.value = localStorage.getItem('ds_weight_style');
         if (localStorage.getItem('ds_weight_interest')) dsWiSlider.value = localStorage.getItem('ds_weight_interest');
         if (localStorage.getItem('ds_weight_rare')) dsWrSlider.value = localStorage.getItem('ds_weight_rare');
-        if (localStorage.getItem('ds_weight_sig')) dsWdSlider.value = localStorage.getItem('ds_weight_sig');
         updateDsWeightLabels();
         
         dsWsSlider.addEventListener('input', updateDsWeightLabels);
         dsWiSlider.addEventListener('input', updateDsWeightLabels);
         dsWrSlider.addEventListener('input', updateDsWeightLabels);
-        dsWdSlider.addEventListener('input', updateDsWeightLabels);
 
         contextMenuDeepScan.addEventListener('click', () => {
             contextMenu.style.display = 'none';
@@ -1223,8 +1212,7 @@
                 const ws = parseInt(dsWsSlider.value) / 100;
                 const wi = parseInt(dsWiSlider.value) / 100;
                 const wr = parseInt(dsWrSlider.value) / 100;
-                const wd = parseInt(dsWdSlider.value) / 100;
-                const targetUrl = `${window.location.protocol}//${window.location.hostname}:3001/api/analyze?target=${encodeURIComponent(currentContextAuthorId)}&ws=${ws}&wi=${wi}&wr=${wr}&wd=${wd}`;
+                const targetUrl = `${window.location.protocol}//${window.location.hostname}:3001/api/analyze?target=${encodeURIComponent(currentContextAuthorId)}&ws=${ws}&wi=${wi}&wr=${wr}`;
                 const res = await fetch(targetUrl);
                 const data = await res.json();
 
