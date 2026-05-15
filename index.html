@@ -1051,7 +1051,19 @@
 
         function chipsToText(chipArray) {
             if (!chipArray || chipArray.length === 0) return '';
-            return chipArray.map((c, i) => {
+            let currentGroups = [];
+            let parts = [];
+
+            chipArray.forEach((c, i) => {
+                let cGroups = c.group ? (Array.isArray(c.group) ? c.group : [c.group]) : [];
+                
+                let common = 0;
+                while(common < currentGroups.length && common < cGroups.length && currentGroups[common] === cGroups[common]) common++;
+
+                for(let j = currentGroups.length - 1; j >= common; j--) {
+                    parts.push(')');
+                }
+
                 let prefix = '';
                 if (c.logic === 'OR') prefix = 'OR ';
                 else if (c.logic === 'NOT') prefix = '-';
@@ -1060,18 +1072,30 @@
                     prefix = '';
                 }
 
-                if (c.type === 'group_start') return prefix + '(';
-                if (c.type === 'group_end') return ')';
-                if (c.type === 'superchat') return prefix + 'is:슈퍼챗';
-
-                let label = CHIP_LABELS[c.type] || c.type;
-                let val = c.value || '';
-                if (val.includes(' ') || val.includes('"')) {
-                    val = `"${val.replace(/"/g, '""')}"`;
+                for(let j = common; j < cGroups.length; j++) {
+                    parts.push(prefix + '(');
+                    prefix = '';
                 }
 
-                return `${prefix}${label}:${val}`;
-            }).join(' ');
+                if (c.type === 'superchat') {
+                    parts.push(prefix + 'is:슈퍼챗');
+                } else {
+                    let label = CHIP_LABELS[c.type] || c.type;
+                    let val = c.value || '';
+                    if (val.includes(' ') || val.includes('"')) {
+                        val = `"${val.replace(/"/g, '""')}"`;
+                    }
+                    parts.push(`${prefix}${label}:${val}`);
+                }
+
+                currentGroups = cGroups;
+            });
+
+            for(let j = 0; j < currentGroups.length; j++) {
+                parts.push(')');
+            }
+
+            return parts.join(' ');
         }
 
         function parseFilterString(str) {
@@ -1095,6 +1119,8 @@
             let newChips = [];
             let pendingLogic = 'AND';
             let explicitLogic = false;
+            let groupStack = [];
+            let groupCounter = 1;
 
             for (let i = 0; i < tokens.length; i++) {
                 let t = tokens[i];
@@ -1110,12 +1136,14 @@
                 pendingLogic = 'AND';
 
                 if (t === '(') {
-                    newChips.push(makeChip('group_start', logic, ''));
-                    explicitLogic = false;
+                    groupStack.push(groupCounter++);
+                    pendingLogic = logic;
+                    explicitLogic = true;
                     continue;
                 }
                 if (t === ')') {
-                    newChips.push(makeChip('group_end', 'AND', ''));
+                    groupStack.pop();
+                    pendingLogic = 'AND';
                     explicitLogic = false;
                     continue;
                 }
@@ -1147,6 +1175,9 @@
                 if (chip) {
                     chip.wasQuoted = wasQuoted;
                     chip.explicitLogic = explicitLogic;
+                    if (groupStack.length > 0) {
+                        chip.group = [...groupStack];
+                    }
                     newChips.push(chip);
                 }
 
@@ -1158,7 +1189,9 @@
                 const c = newChips[i];
                 if (compressed.length > 0) {
                     const prev = compressed[compressed.length - 1];
-                    if (prev.type === 'text' && c.type === 'text' && c.logic === 'AND' && !c.explicitLogic && !prev.wasQuoted && !c.wasQuoted) {
+                    const prevGrpStr = JSON.stringify(prev.group || []);
+                    const cGrpStr = JSON.stringify(c.group || []);
+                    if (prev.type === 'text' && c.type === 'text' && c.logic === 'AND' && !c.explicitLogic && !prev.wasQuoted && !c.wasQuoted && prevGrpStr === cGrpStr) {
                         prev.value += ' ' + c.value;
                         prev.label = (CHIP_LABELS['text'] || '검색') + ': ' + prev.value;
                         continue;
@@ -1169,9 +1202,32 @@
             newChips = compressed;
 
             if (chips && chips.length > 0) {
+                let groupMapping = {};
+                let usedOldGroups = new Set();
                 newChips.forEach(nc => {
-                    const match = chips.find(oc => oc.type === nc.type && oc.value === nc.value && oc.logic === nc.logic && oc.group);
-                    if (match) nc.group = match.group;
+                    let ncGroups = nc.group ? (Array.isArray(nc.group) ? nc.group : [nc.group]) : [];
+                    ncGroups.forEach(g => {
+                        if (!groupMapping[g]) {
+                            const match = chips.find(oc => {
+                                if (oc.type !== nc.type || oc.value !== nc.value || oc.logic !== nc.logic || !oc.group) return false;
+                                let ocGroups = Array.isArray(oc.group) ? oc.group : [oc.group];
+                                let oldG = ocGroups[ocGroups.length - 1];
+                                return !usedOldGroups.has(oldG);
+                            });
+                            if (match) {
+                                let ocGroups = Array.isArray(match.group) ? match.group : [match.group];
+                                let oldG = ocGroups[ocGroups.length - 1];
+                                groupMapping[g] = oldG;
+                                usedOldGroups.add(oldG);
+                            }
+                        }
+                    });
+                });
+                newChips.forEach(nc => {
+                    if (nc.group) {
+                        let ncGroups = Array.isArray(nc.group) ? nc.group : [nc.group];
+                        nc.group = ncGroups.map(g => groupMapping[g] || g);
+                    }
                 });
             }
 
@@ -1249,7 +1305,25 @@
         function setChipGroup(groupId) {
             chipContextMenu.style.display = 'none';
             if (contextChipIndex >= 0 && contextChipIndex < chips.length) {
-                chips[contextChipIndex].group = groupId;
+                if (groupId === null) {
+                    chips[contextChipIndex].group = null;
+                } else {
+                    let currentGroups = chips[contextChipIndex].group;
+                    currentGroups = currentGroups ? (Array.isArray(currentGroups) ? currentGroups : [currentGroups]) : [];
+                    
+                    const idx = currentGroups.indexOf(groupId);
+                    if (idx >= 0) {
+                        currentGroups.splice(idx, 1);
+                    } else {
+                        currentGroups.push(groupId);
+                    }
+                    
+                    if (currentGroups.length === 0) {
+                        chips[contextChipIndex].group = null;
+                    } else {
+                        chips[contextChipIndex].group = currentGroups;
+                    }
+                }
                 renderChips();
                 saveChips();
                 load(true, 0, "down");
@@ -1262,7 +1336,8 @@
                 const el = document.createElement('span');
                 el.className = 'chip ' + (chip.type === 'text' ? 'text' : chip.type);
                 if (chip.group) {
-                    el.classList.add('group-' + chip.group);
+                    let g = Array.isArray(chip.group) ? chip.group[chip.group.length - 1] : chip.group;
+                    el.classList.add('group-' + g);
                 }
 
                 let logicBadge = '';
@@ -1292,6 +1367,21 @@
                     if (contextMenu) contextMenu.style.display = 'none';
                     contextChipIndex = i;
                     chipContextMenu.style.display = 'block';
+
+                    document.querySelectorAll('#chipContextMenu .context-menu-item').forEach(menuEl => {
+                        menuEl.style.backgroundColor = '';
+                    });
+                    
+                    const activeBg = 'rgba(255, 255, 255, 0.15)';
+                    if (chip.logic === 'OR') document.getElementById('chipMenuLogicOr').style.backgroundColor = activeBg;
+                    else if (chip.logic === 'NOT') document.getElementById('chipMenuLogicNot').style.backgroundColor = activeBg;
+                    else document.getElementById('chipMenuLogicAnd').style.backgroundColor = activeBg;
+                    
+                    let cGroups = chip.group ? (Array.isArray(chip.group) ? chip.group : [chip.group]) : [];
+                    cGroups.forEach(g => {
+                        let gEl = document.getElementById('chipMenuG' + g);
+                        if (gEl) gEl.style.backgroundColor = activeBg;
+                    });
 
                     let zoomStr = getComputedStyle(document.body).zoom || "1";
                     let zoomLevel = parseFloat(zoomStr);
@@ -1368,22 +1458,30 @@
 
         function getFiltersParam() {
             let transformed = [];
-            let currentGroup = null;
+            let currentGroups = [];
 
             chips.forEach(c => {
-                if (c.group !== currentGroup) {
-                    if (currentGroup) {
-                        transformed.push({ type: 'group_end', logic: 'AND', value: '' });
-                    }
-                    if (c.group) {
-                        transformed.push({ type: 'group_start', logic: c.logic, value: '' });
-                    }
+                let cGroups = c.group ? (Array.isArray(c.group) ? c.group : [c.group]) : [];
+                
+                let common = 0;
+                while(common < currentGroups.length && common < cGroups.length && currentGroups[common] === cGroups[common]) common++;
+                
+                for(let i = currentGroups.length - 1; i >= common; i--) {
+                    transformed.push({ type: 'group_end', logic: 'AND', value: '' });
                 }
-                transformed.push({ ...c });
-                currentGroup = c.group;
+                for(let i = common; i < cGroups.length; i++) {
+                    let gLogic = (i === cGroups.length - 1) ? c.logic : 'AND'; 
+                    transformed.push({ type: 'group_start', logic: gLogic, value: '' });
+                }
+                
+                let chipCopy = { ...c };
+                delete chipCopy.group;
+                transformed.push(chipCopy);
+                
+                currentGroups = cGroups;
             });
 
-            if (currentGroup) {
+            for(let i = 0; i < currentGroups.length; i++) {
                 transformed.push({ type: 'group_end', logic: 'AND', value: '' });
             }
 
