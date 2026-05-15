@@ -145,10 +145,25 @@
             justify-content: center;
             flex-shrink: 0;
         }
-        .logic-AND { background: rgba(124, 184, 255, 0.2); color: #7cb8ff; border: 1px solid rgba(124, 184, 255, 0.4); }
-        .logic-OR { background: rgba(209, 154, 239, 0.2); color: #d19aef; border: 1px solid rgba(209, 154, 239, 0.4); }
-        .logic-NOT { background: rgba(255, 140, 140, 0.2); color: #ff8c8c; border: 1px solid rgba(255, 140, 140, 0.4); }
-        
+
+        .logic-AND {
+            background: rgba(124, 184, 255, 0.2);
+            color: #7cb8ff;
+            border: 1px solid rgba(124, 184, 255, 0.4);
+        }
+
+        .logic-OR {
+            background: rgba(209, 154, 239, 0.2);
+            color: #d19aef;
+            border: 1px solid rgba(209, 154, 239, 0.4);
+        }
+
+        .logic-NOT {
+            background: rgba(255, 140, 140, 0.2);
+            color: #ff8c8c;
+            border: 1px solid rgba(255, 140, 140, 0.4);
+        }
+
         .chip-type-select {
             padding: 4px 6px;
             background: #1e1e1e;
@@ -431,11 +446,30 @@
             background: #252525;
             border: 1px solid #3d3d3d;
             border-radius: 4px;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.5);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
             padding: 4px 0;
             z-index: 20000;
             display: none;
             min-width: 150px;
+            max-height: 250px;
+            overflow-y: auto;
+        }
+
+        .context-menu::-webkit-scrollbar {
+            width: 6px;
+        }
+
+        .context-menu::-webkit-scrollbar-track {
+            background: transparent;
+        }
+
+        .context-menu::-webkit-scrollbar-thumb {
+            background: #4a4a4a;
+            border-radius: 3px;
+        }
+
+        .context-menu::-webkit-scrollbar-thumb:hover {
+            background: #606060;
         }
 
         .context-menu-item {
@@ -450,6 +484,14 @@
             background: #3d3d3d;
         }
 
+        .context-menu-header {
+            padding: 8px 16px 4px 16px;
+            font-size: 11px;
+            font-weight: 700;
+            color: #888;
+            cursor: default;
+        }
+
         /* History Modal */
         .history-modal-overlay {
             position: fixed;
@@ -457,7 +499,7 @@
             left: 0;
             right: 0;
             bottom: 0;
-            background: rgba(0,0,0,0.7);
+            background: rgba(0, 0, 0, 0.7);
             z-index: 30000;
             display: none;
             justify-content: center;
@@ -477,7 +519,7 @@
             max-height: 75%;
             display: flex;
             flex-direction: column;
-            box-shadow: 0 8px 24px rgba(0,0,0,0.6);
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.6);
         }
 
         .history-modal-header {
@@ -544,6 +586,7 @@
             font-size: 12px;
             color: #aaa;
         }
+
         /* DeepScan Modal Styles */
         .deepscan-modal {
             background: #0a0a0a;
@@ -554,7 +597,7 @@
             max-height: 85%;
             display: flex;
             flex-direction: column;
-            box-shadow: 0 8px 32px rgba(0,0,0,0.8);
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.8);
         }
 
         .deepscan-modal-content {
@@ -570,79 +613,290 @@
             display: flex;
             gap: 12px;
             padding: 12px;
-            background: rgba(255,255,255,0.03);
+            background: rgba(255, 255, 255, 0.03);
             border: 1px solid #27272a;
             border-radius: 8px;
         }
+
         .weight-slider-item {
             flex: 1;
             display: flex;
             flex-direction: column;
             gap: 4px;
         }
+
         .weight-slider-item label {
             font-size: 11px;
             color: #a1a1aa;
             display: flex;
             justify-content: space-between;
         }
-        .weight-slider-item label .wval { color: #f4f4f5; font-weight: 600; }
+
+        .weight-slider-item label .wval {
+            color: #f4f4f5;
+            font-weight: 600;
+        }
+
         .weight-slider-item input[type="range"] {
-            -webkit-appearance: none; width: 100%; height: 4px;
-            background: #27272a; border-radius: 2px; outline: none;
+            -webkit-appearance: none;
+            width: 100%;
+            height: 4px;
+            background: #27272a;
+            border-radius: 2px;
+            outline: none;
         }
+
         .weight-slider-item input[type="range"]::-webkit-slider-thumb {
-            -webkit-appearance: none; width: 12px; height: 12px;
-            border-radius: 50%; background: #3b82f6; cursor: pointer;
+            -webkit-appearance: none;
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background: #3b82f6;
+            cursor: pointer;
         }
-        .weight-slider-item.interest input[type="range"]::-webkit-slider-thumb { background: #10b981; }
-        .weight-slider-item.rare input[type="range"]::-webkit-slider-thumb { background: #f97316; }
+
+        .weight-slider-item.interest input[type="range"]::-webkit-slider-thumb {
+            background: #10b981;
+        }
+
+        .weight-slider-item.rare input[type="range"]::-webkit-slider-thumb {
+            background: #f97316;
+        }
 
         .deepscan-btn {
-            background: #3b82f6; color: white; border: none; padding: 10px;
-            border-radius: 6px; font-size: 13px; font-weight: 600;
-            cursor: pointer; transition: background 0.2s; text-align: center;
+            background: #3b82f6;
+            color: white;
+            border: none;
+            padding: 10px;
+            border-radius: 6px;
+            font-size: 13px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background 0.2s;
+            text-align: center;
         }
-        .deepscan-btn:hover { background: #2563eb; }
+
+        .deepscan-btn:hover {
+            background: #2563eb;
+        }
 
         .result-card {
-            background: #0a0a0a; border: 1px solid #27272a; border-radius: 10px;
-            padding: 16px; display: flex; flex-direction: column; gap: 12px;
+            background: #0a0a0a;
+            border: 1px solid #27272a;
+            border-radius: 10px;
+            padding: 16px;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
         }
-        .card-top { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; }
-        .user-info h3 { font-size: 15px; font-weight: 600; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin: 0; color: #f4f4f5; }
-        .user-id { font-size: 11px; color: #a1a1aa; font-family: monospace; margin-top: 4px; word-break: break-all; }
-        .match-score { display: flex; flex-direction: column; align-items: flex-end; flex-shrink: 0; gap: 2px; }
-        .score-value { font-size: 20px; font-weight: 700; color: #f4f4f5; }
-        .score-label { font-size: 10px; color: #a1a1aa; text-transform: uppercase; }
 
-        .score-bars { display: flex; gap: 12px; align-items: center; }
-        .score-bar-item { flex: 1; display: flex; flex-direction: column; gap: 4px; }
-        .score-bar-header { display: flex; justify-content: space-between; font-size: 10px; color: #a1a1aa; }
-        .score-bar-header .val { font-weight: 600; color: #f4f4f5; }
-        .score-bar-track { height: 4px; background: rgba(255,255,255,0.06); border-radius: 2px; overflow: hidden; }
-        .score-bar-fill { height: 100%; border-radius: 2px; }
-        .score-bar-fill.style { background: linear-gradient(90deg, #3b82f6, #8b5cf6); }
-        .score-bar-fill.interest { background: linear-gradient(90deg, #10b981, #34d399); }
-        .score-bar-fill.rare { background: linear-gradient(90deg, #f97316, #fb923c); }
+        .card-top {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            gap: 12px;
+        }
 
-        .keywords { display: flex; flex-wrap: wrap; gap: 6px; padding-top: 12px; border-top: 1px dashed #27272a; }
-        .keyword-tag { background: rgba(255,255,255,0.05); border: 1px solid #27272a; padding: 4px 8px; border-radius: 4px; font-size: 11px; color: #d4d4d8; }
-        .keyword-tag.interest-tag { background: rgba(16,185,129,0.08); border-color: rgba(16,185,129,0.25); color: #6ee7b7; }
-        .keyword-tag.opinion-tag { background: rgba(139,92,246,0.08); border-color: rgba(139,92,246,0.25); color: #c4b5fd; }
-        .keyword-tag.channel-tag { background: rgba(59,130,246,0.08); border-color: rgba(59,130,246,0.25); color: #93c5fd; }
-        .keyword-tag.rare-tag { background: rgba(249,115,22,0.1); border-color: rgba(249,115,22,0.3); color: #fdba74; }
-        .df-badge { font-size: 9px; background: rgba(255,255,255,0.08); padding: 1px 4px; border-radius: 2px; margin-left: 4px; color: #a1a1aa; }
-        .section-label { font-size: 10px; font-weight: 600; color: #a1a1aa; width: 100%; margin-top: 4px; }
-        .chip.group-1 { border: 2px solid #ef4444; }
-        .chip.group-2 { border: 2px solid #3b82f6; }
-        .chip.group-3 { border: 2px solid #22c55e; }
-        
-        .rank-badge { font-size: 10px; padding: 2px 6px; border-radius: 4px; font-weight: 600; }
-        .rank-1 { background: rgba(239,68,68,0.15); color: #ef4444; border: 1px solid rgba(239,68,68,0.3); }
-        .rank-2 { background: rgba(249,115,22,0.15); color: #f97316; border: 1px solid rgba(249,115,22,0.3); }
-        .rank-3 { background: rgba(234,179,8,0.15); color: #eab308; border: 1px solid rgba(234,179,8,0.3); }
-        .rank-other { background: #27272a; color: #a1a1aa; border: 1px solid transparent; }
+        .user-info h3 {
+            font-size: 15px;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            flex-wrap: wrap;
+            margin: 0;
+            color: #f4f4f5;
+        }
+
+        .user-id {
+            font-size: 11px;
+            color: #a1a1aa;
+            font-family: monospace;
+            margin-top: 4px;
+            word-break: break-all;
+        }
+
+        .match-score {
+            display: flex;
+            flex-direction: column;
+            align-items: flex-end;
+            flex-shrink: 0;
+            gap: 2px;
+        }
+
+        .score-value {
+            font-size: 20px;
+            font-weight: 700;
+            color: #f4f4f5;
+        }
+
+        .score-label {
+            font-size: 10px;
+            color: #a1a1aa;
+            text-transform: uppercase;
+        }
+
+        .score-bars {
+            display: flex;
+            gap: 12px;
+            align-items: center;
+        }
+
+        .score-bar-item {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+
+        .score-bar-header {
+            display: flex;
+            justify-content: space-between;
+            font-size: 10px;
+            color: #a1a1aa;
+        }
+
+        .score-bar-header .val {
+            font-weight: 600;
+            color: #f4f4f5;
+        }
+
+        .score-bar-track {
+            height: 4px;
+            background: rgba(255, 255, 255, 0.06);
+            border-radius: 2px;
+            overflow: hidden;
+        }
+
+        .score-bar-fill {
+            height: 100%;
+            border-radius: 2px;
+        }
+
+        .score-bar-fill.style {
+            background: linear-gradient(90deg, #3b82f6, #8b5cf6);
+        }
+
+        .score-bar-fill.interest {
+            background: linear-gradient(90deg, #10b981, #34d399);
+        }
+
+        .score-bar-fill.rare {
+            background: linear-gradient(90deg, #f97316, #fb923c);
+        }
+
+        .keywords {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+            padding-top: 12px;
+            border-top: 1px dashed #27272a;
+        }
+
+        .keyword-tag {
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid #27272a;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 11px;
+            color: #d4d4d8;
+        }
+
+        .keyword-tag.interest-tag {
+            background: rgba(16, 185, 129, 0.08);
+            border-color: rgba(16, 185, 129, 0.25);
+            color: #6ee7b7;
+        }
+
+        .keyword-tag.opinion-tag {
+            background: rgba(139, 92, 246, 0.08);
+            border-color: rgba(139, 92, 246, 0.25);
+            color: #c4b5fd;
+        }
+
+        .keyword-tag.channel-tag {
+            background: rgba(59, 130, 246, 0.08);
+            border-color: rgba(59, 130, 246, 0.25);
+            color: #93c5fd;
+        }
+
+        .keyword-tag.rare-tag {
+            background: rgba(249, 115, 22, 0.1);
+            border-color: rgba(249, 115, 22, 0.3);
+            color: #fdba74;
+        }
+
+        .df-badge {
+            font-size: 9px;
+            background: rgba(255, 255, 255, 0.08);
+            padding: 1px 4px;
+            border-radius: 2px;
+            margin-left: 4px;
+            color: #a1a1aa;
+        }
+
+        .section-label {
+            font-size: 10px;
+            font-weight: 600;
+            color: #a1a1aa;
+            width: 100%;
+            margin-top: 4px;
+        }
+
+        .chip.group-1 {
+            border: 2px solid #ef4444;
+        }
+
+        .chip.group-2 {
+            border: 2px solid #3b82f6;
+        }
+
+        .chip.group-3 {
+            border: 2px solid #22c55e;
+        }
+
+        .chip.group-4 {
+            border: 2px solid #eab308;
+        }
+
+        .chip.group-5 {
+            border: 2px solid #a855f7;
+        }
+
+        .chip.group-6 {
+            border: 2px solid #f97316;
+        }
+
+        .rank-badge {
+            font-size: 10px;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-weight: 600;
+        }
+
+        .rank-1 {
+            background: rgba(239, 68, 68, 0.15);
+            color: #ef4444;
+            border: 1px solid rgba(239, 68, 68, 0.3);
+        }
+
+        .rank-2 {
+            background: rgba(249, 115, 22, 0.15);
+            color: #f97316;
+            border: 1px solid rgba(249, 115, 22, 0.3);
+        }
+
+        .rank-3 {
+            background: rgba(234, 179, 8, 0.15);
+            color: #eab308;
+            border: 1px solid rgba(234, 179, 8, 0.3);
+        }
+
+        .rank-other {
+            background: #27272a;
+            color: #a1a1aa;
+            border: 1px solid transparent;
+        }
     </style>
     <script src="https://cdn.jsdelivr.net/npm/pako@2/dist/pako.min.js"></script>
 
@@ -679,14 +933,27 @@
     </div>
 
     <div id="contextMenu" class="context-menu">
-        <div class="context-menu-item" id="contextMenuHistory">사용자 닉네임 + 프로필사진 변경 이력</div>
-        <div class="context-menu-item" id="contextMenuDeepScan">동일인물 찾기 (Deep Scan)</div>
+        <div class="context-menu-header">일반</div>
+        <div class="context-menu-item" id="contextMenuHistory">닉네임 변경 이력</div>
+        <div class="context-menu-item" id="contextMenuDeepScan">동일인물 찾기</div>
+        <div class="context-menu-header">조건</div>
+        <div class="context-menu-item" id="contextMenuAddAnd">그리고</div>
+        <div class="context-menu-item" id="contextMenuAddOr">또는</div>
+        <div class="context-menu-item" id="contextMenuAddNot">제외</div>
     </div>
 
     <div id="chipContextMenu" class="context-menu">
+        <div class="context-menu-header">조건</div>
+        <div class="context-menu-item" id="chipMenuLogicAnd">그리고</div>
+        <div class="context-menu-item" id="chipMenuLogicOr">또는</div>
+        <div class="context-menu-item" id="chipMenuLogicNot">제외</div>
+        <div class="context-menu-header">그룹</div>
         <div class="context-menu-item" id="chipMenuG1">🔴 그룹 1 지정</div>
         <div class="context-menu-item" id="chipMenuG2">🔵 그룹 2 지정</div>
         <div class="context-menu-item" id="chipMenuG3">🟢 그룹 3 지정</div>
+        <div class="context-menu-item" id="chipMenuG4">🟡 그룹 4 지정</div>
+        <div class="context-menu-item" id="chipMenuG5">🟣 그룹 5 지정</div>
+        <div class="context-menu-item" id="chipMenuG6">🟠 그룹 6 지정</div>
         <div class="context-menu-item" id="chipMenuClear">⚪ 그룹 해제</div>
     </div>
 
@@ -788,21 +1055,21 @@
                 let prefix = '';
                 if (c.logic === 'OR') prefix = 'OR ';
                 else if (c.logic === 'NOT') prefix = '-';
-                
+
                 if (i === 0 && c.logic !== 'NOT') {
                     prefix = '';
                 }
-                
+
                 if (c.type === 'group_start') return prefix + '(';
                 if (c.type === 'group_end') return ')';
                 if (c.type === 'superchat') return prefix + 'is:슈퍼챗';
-                
+
                 let label = CHIP_LABELS[c.type] || c.type;
                 let val = c.value || '';
                 if (val.includes(' ') || val.includes('"')) {
                     val = `"${val.replace(/"/g, '""')}"`;
                 }
-                
+
                 return `${prefix}${label}:${val}`;
             }).join(' ');
         }
@@ -824,24 +1091,24 @@
                 }
             }
             if (current.trim()) tokens.push(current.trim());
-            
+
             let newChips = [];
             let pendingLogic = 'AND';
             let explicitLogic = false;
-            
+
             for (let i = 0; i < tokens.length; i++) {
                 let t = tokens[i];
                 if (t.toUpperCase() === 'AND') { pendingLogic = 'AND'; explicitLogic = true; continue; }
                 if (t.toUpperCase() === 'OR') { pendingLogic = 'OR'; explicitLogic = true; continue; }
                 if (t.toUpperCase() === 'NOT') { pendingLogic = 'NOT'; explicitLogic = true; continue; }
-                
+
                 let logic = pendingLogic;
                 if (t.toLowerCase().startsWith('or:')) { logic = 'OR'; t = t.substring(3); explicitLogic = true; }
                 else if (t.toLowerCase().startsWith('not:')) { logic = 'NOT'; t = t.substring(4); explicitLogic = true; }
                 else if (t.startsWith('-')) { logic = 'NOT'; t = t.substring(1); explicitLogic = true; }
-                
+
                 pendingLogic = 'AND';
-                
+
                 if (t === '(') {
                     newChips.push(makeChip('group_start', logic, ''));
                     explicitLogic = false;
@@ -852,37 +1119,37 @@
                     explicitLogic = false;
                     continue;
                 }
-                
+
                 let type = 'text';
                 let val = t;
-                
+
                 const colonIdx = t.indexOf(':');
                 if (colonIdx > 0 && !t.startsWith('"')) {
                     const prefix = t.toLowerCase().substring(0, colonIdx);
                     const rest = t.substring(colonIdx + 1);
-                    if (['ch','channel','채널'].includes(prefix)) { type = 'channel'; val = rest; }
-                    else if (['@','user','유저','유저id'].includes(prefix)) { type = 'userId'; val = rest; }
-                    else if (['author','작성자'].includes(prefix)) { type = 'author'; val = rest; }
-                    else if (['text','검색'].includes(prefix)) { type = 'text'; val = rest; }
-                    else if (['is','has','타입'].includes(prefix) && ['sc','superchat','슈퍼챗'].includes(rest.toLowerCase())) { type = 'superchat'; val = ''; }
+                    if (['ch', 'channel', '채널'].includes(prefix)) { type = 'channel'; val = rest; }
+                    else if (['@', 'user', '유저', '유저id'].includes(prefix)) { type = 'userId'; val = rest; }
+                    else if (['author', '작성자'].includes(prefix)) { type = 'author'; val = rest; }
+                    else if (['text', '검색'].includes(prefix)) { type = 'text'; val = rest; }
+                    else if (['is', 'has', '타입'].includes(prefix) && ['sc', 'superchat', '슈퍼챗'].includes(rest.toLowerCase())) { type = 'superchat'; val = ''; }
                 } else if (t.startsWith('@')) {
                     type = 'userId';
                     val = t.substring(1);
                 }
-                
+
                 let wasQuoted = false;
                 if (val.startsWith('"') && val.endsWith('"') && val.length >= 2) {
                     val = val.substring(1, val.length - 1).replace(/""/g, '"');
                     wasQuoted = true;
                 }
-                
+
                 const chip = makeChip(type, logic, val);
                 if (chip) {
                     chip.wasQuoted = wasQuoted;
                     chip.explicitLogic = explicitLogic;
                     newChips.push(chip);
                 }
-                
+
                 explicitLogic = false;
             }
 
@@ -907,7 +1174,7 @@
                     if (match) nc.group = match.group;
                 });
             }
-            
+
             return newChips;
         }
 
@@ -957,9 +1224,26 @@
         let contextChipIndex = -1;
         const chipContextMenu = document.getElementById('chipContextMenu');
 
+        document.getElementById('chipMenuLogicAnd').addEventListener('click', () => setChipLogic('AND'));
+        document.getElementById('chipMenuLogicOr').addEventListener('click', () => setChipLogic('OR'));
+        document.getElementById('chipMenuLogicNot').addEventListener('click', () => setChipLogic('NOT'));
+
+        function setChipLogic(logic) {
+            chipContextMenu.style.display = 'none';
+            if (contextChipIndex >= 0 && contextChipIndex < chips.length) {
+                chips[contextChipIndex].logic = logic;
+                renderChips();
+                saveChips();
+                load(true, 0, "down");
+            }
+        }
+
         document.getElementById('chipMenuG1').addEventListener('click', () => setChipGroup(1));
         document.getElementById('chipMenuG2').addEventListener('click', () => setChipGroup(2));
         document.getElementById('chipMenuG3').addEventListener('click', () => setChipGroup(3));
+        document.getElementById('chipMenuG4').addEventListener('click', () => setChipGroup(4));
+        document.getElementById('chipMenuG5').addEventListener('click', () => setChipGroup(5));
+        document.getElementById('chipMenuG6').addEventListener('click', () => setChipGroup(6));
         document.getElementById('chipMenuClear').addEventListener('click', () => setChipGroup(null));
 
         function setChipGroup(groupId) {
@@ -980,16 +1264,16 @@
                 if (chip.group) {
                     el.classList.add('group-' + chip.group);
                 }
-                
+
                 let logicBadge = '';
                 if (chip.logic === 'OR') logicBadge = '<span class="logic-badge logic-OR">또는</span>';
                 else if (chip.logic === 'NOT') logicBadge = '<span class="logic-badge logic-NOT">제외</span>';
                 else logicBadge = '<span class="logic-badge logic-AND">그리고</span>';
-                
+
                 if (i === 0 && chip.logic !== 'NOT') {
                     logicBadge = '';
                 }
-                
+
                 el.innerHTML = logicBadge;
                 const labelSpan = document.createElement('span');
                 labelSpan.className = 'chip-label';
@@ -1000,27 +1284,46 @@
                 removeSpan.setAttribute('data-index', i);
                 removeSpan.innerHTML = '&times;';
                 el.appendChild(removeSpan);
-                
+
                 el.addEventListener('contextmenu', (e) => {
                     e.preventDefault();
                     e.stopPropagation();
+                    const contextMenu = document.getElementById('contextMenu');
+                    if (contextMenu) contextMenu.style.display = 'none';
                     contextChipIndex = i;
                     chipContextMenu.style.display = 'block';
-                    
-                    const zoomLevel = parseFloat(getComputedStyle(document.body).zoom) || 1;
+
+                    let zoomStr = getComputedStyle(document.body).zoom || "1";
+                    let zoomLevel = parseFloat(zoomStr);
+                    if (zoomStr.endsWith('%')) zoomLevel /= 100;
+                    else if (zoomLevel > 5) zoomLevel /= 100;
+                    if (isNaN(zoomLevel) || zoomLevel <= 0) zoomLevel = 1;
+
+                    const winWidth = window.innerWidth / zoomLevel;
+                    const winHeight = window.innerHeight / zoomLevel;
                     let left = e.clientX / zoomLevel;
                     let top = e.clientY / zoomLevel;
-                    
+
+                    chipContextMenu.style.maxHeight = '250px';
                     const rect = chipContextMenu.getBoundingClientRect();
-                    if (e.clientX + rect.width * zoomLevel > window.innerWidth) {
-                        left -= rect.width;
+                    const menuW = rect.width / zoomLevel;
+                    const menuH = rect.height / zoomLevel;
+
+                    if (left + menuW > winWidth) {
+                        left = left - menuW;
                     }
-                    if (e.clientY + rect.height * zoomLevel > window.innerHeight) {
-                        top -= rect.height;
+                    if (top + menuH > winHeight) {
+                        top = top - menuH;
                     }
-                    
-                    chipContextMenu.style.left = Math.max(0, left) + 'px';
-                    chipContextMenu.style.top = Math.max(0, top) + 'px';
+
+                    if (left < 0) left = 0;
+                    if (top < 0) {
+                        top = 0;
+                        chipContextMenu.style.maxHeight = Math.max(100, winHeight - 10) + 'px';
+                    }
+
+                    chipContextMenu.style.left = left + 'px';
+                    chipContextMenu.style.top = top + 'px';
                 });
                 chipInputArea.insertBefore(el, chipInput);
             });
@@ -1034,20 +1337,20 @@
         function loadSavedChips() {
             try {
                 const saved = localStorage.getItem('chatChips');
-                if (saved) { 
-                    chips = JSON.parse(saved); 
+                if (saved) {
+                    chips = JSON.parse(saved);
                     // migrate old chips to new format
                     chips.forEach(c => {
                         if (c.type === 'text_or') { c.type = 'text'; c.logic = 'OR'; }
                         else if (c.type === 'text_not') { c.type = 'text'; c.logic = 'NOT'; }
                         if (!c.logic) c.logic = 'AND';
-                        
+
                         // Fix old label text
                         let baseLabel = CHIP_LABELS[c.type] || c.type;
                         if (c.type === 'superchat') c.label = '슈퍼챗';
                         else c.label = baseLabel + ': ' + c.value;
                     });
-                    renderChips(); 
+                    renderChips();
                 }
             } catch (e) { chips = []; }
         }
@@ -1055,7 +1358,7 @@
         function getFiltersParam() {
             let transformed = [];
             let currentGroup = null;
-            
+
             chips.forEach(c => {
                 if (c.group !== currentGroup) {
                     if (currentGroup) {
@@ -1065,14 +1368,14 @@
                         transformed.push({ type: 'group_start', logic: c.logic, value: '' });
                     }
                 }
-                transformed.push({...c});
+                transformed.push({ ...c });
                 currentGroup = c.group;
             });
-            
+
             if (currentGroup) {
                 transformed.push({ type: 'group_end', logic: 'AND', value: '' });
             }
-            
+
             return encodeURIComponent(JSON.stringify(transformed));
         }
 
@@ -1130,58 +1433,96 @@
             });
             e3.addEventListener('contextmenu', function (e) {
                 e.preventDefault();
+                const chipContextMenu = document.getElementById('chipContextMenu');
+                if (chipContextMenu) chipContextMenu.style.display = 'none';
                 currentContextAuthorId = e.target.getAttribute("data-user");
                 contextMenu.style.display = 'block';
-                
-                const zoomLevel = parseFloat(getComputedStyle(document.body).zoom) || 1;
+
+                let zoomStr = getComputedStyle(document.body).zoom || "1";
+                let zoomLevel = parseFloat(zoomStr);
+                if (zoomStr.endsWith('%')) zoomLevel /= 100;
+                else if (zoomLevel > 5) zoomLevel /= 100;
+                if (isNaN(zoomLevel) || zoomLevel <= 0) zoomLevel = 1;
+
+                const winWidth = window.innerWidth / zoomLevel;
+                const winHeight = window.innerHeight / zoomLevel;
                 let left = e.clientX / zoomLevel;
                 let top = e.clientY / zoomLevel;
-                
+
+                contextMenu.style.maxHeight = '250px';
                 const rect = contextMenu.getBoundingClientRect();
-                if (e.clientX + rect.width * zoomLevel > window.innerWidth) {
-                    left -= rect.width;
+                const menuW = rect.width / zoomLevel;
+                const menuH = rect.height / zoomLevel;
+
+                if (left + menuW > winWidth) {
+                    left = left - menuW;
                 }
-                if (e.clientY + rect.height * zoomLevel > window.innerHeight) {
-                    top -= rect.height;
+                if (top + menuH > winHeight) {
+                    top = top - menuH;
                 }
-                
-                contextMenu.style.left = Math.max(0, left) + 'px';
-                contextMenu.style.top = Math.max(0, top) + 'px';
+
+                if (left < 0) left = 0;
+                if (top < 0) {
+                    top = 0;
+                    contextMenu.style.maxHeight = Math.max(100, winHeight - 10) + 'px';
+                }
+
+                contextMenu.style.left = left + 'px';
+                contextMenu.style.top = top + 'px';
             });
 
             let touchTimer;
             let touchStartX = 0, touchStartY = 0;
             let contextMenuOpened = false;
 
-            e3.addEventListener('touchstart', function(e) {
+            e3.addEventListener('touchstart', function (e) {
                 if (e.touches && e.touches.length === 1) {
                     touchStartX = e.touches[0].clientX;
                     touchStartY = e.touches[0].clientY;
                     contextMenuOpened = false;
-                    touchTimer = setTimeout(function() {
+                    touchTimer = setTimeout(function () {
                         contextMenuOpened = true;
+                        const chipContextMenu = document.getElementById('chipContextMenu');
+                        if (chipContextMenu) chipContextMenu.style.display = 'none';
                         currentContextAuthorId = e3.getAttribute("data-user");
                         contextMenu.style.display = 'block';
-                        
-                        const zoomLevel = parseFloat(getComputedStyle(document.body).zoom) || 1;
+
+                        let zoomStr = getComputedStyle(document.body).zoom || "1";
+                        let zoomLevel = parseFloat(zoomStr);
+                        if (zoomStr.endsWith('%')) zoomLevel /= 100;
+                        else if (zoomLevel > 5) zoomLevel /= 100;
+                        if (isNaN(zoomLevel) || zoomLevel <= 0) zoomLevel = 1;
+
+                        const winWidth = window.innerWidth / zoomLevel;
+                        const winHeight = window.innerHeight / zoomLevel;
                         let left = touchStartX / zoomLevel;
                         let top = touchStartY / zoomLevel;
-                        
+
+                        contextMenu.style.maxHeight = '250px';
                         const rect = contextMenu.getBoundingClientRect();
-                        if (touchStartX + rect.width * zoomLevel > window.innerWidth) {
-                            left -= rect.width;
+                        const menuW = rect.width / zoomLevel;
+                        const menuH = rect.height / zoomLevel;
+
+                        if (left + menuW > winWidth) {
+                            left = left - menuW;
                         }
-                        if (touchStartY + rect.height * zoomLevel > window.innerHeight) {
-                            top -= rect.height;
+                        if (top + menuH > winHeight) {
+                            top = top - menuH;
                         }
-                        
-                        contextMenu.style.left = Math.max(0, left) + 'px';
-                        contextMenu.style.top = Math.max(0, top) + 'px';
+
+                        if (left < 0) left = 0;
+                        if (top < 0) {
+                            top = 0;
+                            contextMenu.style.maxHeight = Math.max(100, winHeight - 10) + 'px';
+                        }
+
+                        contextMenu.style.left = left + 'px';
+                        contextMenu.style.top = top + 'px';
                     }, 500);
                 }
             });
 
-            e3.addEventListener('touchmove', function(e) {
+            e3.addEventListener('touchmove', function (e) {
                 if (touchTimer && e.touches && e.touches.length > 0) {
                     const dx = e.touches[0].clientX - touchStartX;
                     const dy = e.touches[0].clientY - touchStartY;
@@ -1192,7 +1533,7 @@
                 }
             });
 
-            e3.addEventListener('touchend', function(e) {
+            e3.addEventListener('touchend', function (e) {
                 if (touchTimer) {
                     clearTimeout(touchTimer);
                     touchTimer = null;
@@ -1203,7 +1544,7 @@
                 }
             });
 
-            e3.addEventListener('touchcancel', function(e) {
+            e3.addEventListener('touchcancel', function (e) {
                 if (touchTimer) {
                     clearTimeout(touchTimer);
                     touchTimer = null;
@@ -1341,14 +1682,14 @@
         function resizeChipInput() {
             chipInput.style.height = 'auto';
             chipInput.style.height = chipInput.scrollHeight + 'px';
-            
+
             let estWidth = 30;
             const val = chipInput.value;
             for (let i = 0; i < val.length; i++) {
                 estWidth += val.charCodeAt(i) > 255 ? 13 : 8;
             }
             chipInput.style.minWidth = `clamp(80px, ${estWidth}px, 100%)`;
-            
+
             adjustContentMargin();
         }
         chipInput.addEventListener('input', resizeChipInput);
@@ -1369,35 +1710,35 @@
             const valSplit = chipTypeSelect.value.split('|');
             const logic = valSplit[0];
             const type = valSplit[1];
-            
+
             if (document.activeElement !== chipInput) {
                 chipInput.focus();
             }
-            
+
             setTimeout(() => {
                 let appendStr = '';
                 if (logic === 'OR') appendStr += 'OR ';
                 else if (logic === 'NOT') appendStr += '-';
                 else if (logic === 'AND' && type === 'text') appendStr += 'AND ';
-                
+
                 if (type === 'superchat') appendStr += 'is:슈퍼챗 ';
                 else if (type !== 'text') {
                     const label = CHIP_LABELS[type] || type;
                     appendStr += label + ':';
                 }
-                
+
                 const caretPos = chipInput.selectionStart;
                 const textBefore = chipInput.value.substring(0, caretPos);
                 const textAfter = chipInput.value.substring(caretPos);
-                
+
                 let prefix = '';
                 let suffix = '';
                 if (textBefore.length > 0 && !textBefore.endsWith(' ')) prefix = ' ';
                 if (textAfter.length > 0 && !textAfter.startsWith(' ')) suffix = ' ';
-                
+
                 chipInput.value = textBefore + prefix + appendStr + suffix + textAfter;
                 chipInput.selectionStart = chipInput.selectionEnd = caretPos + prefix.length + appendStr.length;
-                
+
                 chipTypeSelect.value = '';
                 resizeChipInput();
             }, 10);
@@ -1414,7 +1755,7 @@
                 originalText = text;
                 chipInput.value = text + (text.length > 0 ? ' ' : '');
                 resizeChipInput();
-                
+
                 // 마우스 클릭 위치에 따라 캐럿이 중간에 생기는 현상 방지 (무조건 맨 끝으로 이동)
                 setTimeout(() => {
                     chipInput.selectionStart = chipInput.selectionEnd = chipInput.value.length;
@@ -1432,7 +1773,7 @@
                     // 텍스트가 수정되었다면, 엔터를 치기 전까지 칩으로 돌아가지 않고 텍스트 모드 유지
                     return;
                 }
-                
+
                 isEditingText = false;
                 chipInput.value = '';
                 resizeChipInput();
@@ -1477,7 +1818,7 @@
             try {
                 const res = await fetch('/api/user_history/' + encodeURIComponent(authorId));
                 const data = await res.json();
-                
+
                 if (!data || data.length === 0) {
                     historyModalContent.innerHTML = '<div class="empty">이력이 없습니다.</div>';
                     return;
@@ -1507,6 +1848,34 @@
             openHistoryModal(currentContextAuthorId);
         });
 
+        function addConditionFromContextMenu(logicPrefix) {
+            contextMenu.style.display = 'none';
+            if (!currentContextAuthorId) return;
+
+            let prefixToAdd = logicPrefix === 'AND' ? '' : logicPrefix + ' ';
+
+            if (isEditingText) {
+                const appendStr = prefixToAdd + '@' + currentContextAuthorId;
+                const caretPos = chipInput.selectionStart || chipInput.value.length;
+                const textBefore = chipInput.value.substring(0, caretPos);
+                const textAfter = chipInput.value.substring(caretPos);
+                let prefix = '';
+                let suffix = '';
+                if (textBefore.length > 0 && !textBefore.endsWith(' ')) prefix = ' ';
+                if (textAfter.length > 0 && !textAfter.startsWith(' ')) suffix = ' ';
+                chipInput.value = textBefore + prefix + appendStr + suffix + textAfter;
+                chipInput.selectionStart = chipInput.selectionEnd = caretPos + prefix.length + appendStr.length;
+                resizeChipInput();
+                chipInput.focus();
+            } else {
+                addChip(prefixToAdd + '@' + currentContextAuthorId);
+            }
+        }
+
+        document.getElementById('contextMenuAddAnd').addEventListener('click', () => addConditionFromContextMenu('AND'));
+        document.getElementById('contextMenuAddOr').addEventListener('click', () => addConditionFromContextMenu('OR'));
+        document.getElementById('contextMenuAddNot').addEventListener('click', () => addConditionFromContextMenu('NOT'));
+
         historyModalClose.addEventListener('click', () => {
             historyModalOverlay.style.display = 'none';
         });
@@ -1524,19 +1893,19 @@
             dsWsLabel.textContent = dsWsSlider.value + '%';
             dsWiLabel.textContent = dsWiSlider.value + '%';
             dsWrLabel.textContent = dsWrSlider.value + '%';
-            
+
             // Save to localStorage
             localStorage.setItem('ds_weight_style', dsWsSlider.value);
             localStorage.setItem('ds_weight_interest', dsWiSlider.value);
             localStorage.setItem('ds_weight_rare', dsWrSlider.value);
         }
-        
+
         // Load from localStorage if exists
         if (localStorage.getItem('ds_weight_style')) dsWsSlider.value = localStorage.getItem('ds_weight_style');
         if (localStorage.getItem('ds_weight_interest')) dsWiSlider.value = localStorage.getItem('ds_weight_interest');
         if (localStorage.getItem('ds_weight_rare')) dsWrSlider.value = localStorage.getItem('ds_weight_rare');
         updateDsWeightLabels();
-        
+
         dsWsSlider.addEventListener('input', updateDsWeightLabels);
         dsWiSlider.addEventListener('input', updateDsWeightLabels);
         dsWrSlider.addEventListener('input', updateDsWeightLabels);
@@ -1544,10 +1913,10 @@
         contextMenuDeepScan.addEventListener('click', () => {
             contextMenu.style.display = 'none';
             if (!currentContextAuthorId) return;
-            
+
             deepScanModalOverlay.style.display = 'flex';
             deepScanResults.innerHTML = '';
-            
+
             // Automatically trigger scan on open
             doDeepScan();
         });
@@ -1591,7 +1960,7 @@
                         const stylePct = (r.styleSim * 100).toFixed(1);
                         const intPct = (r.interestSim * 100).toFixed(1);
                         const rarePct = ((r.rareSim || 0) * 100).toFixed(1);
-                        
+
                         let rankClass = 'rank-other';
                         if (idx === 0) rankClass = 'rank-1';
                         else if (idx === 1) rankClass = 'rank-2';
