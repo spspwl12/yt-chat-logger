@@ -18,7 +18,7 @@
             display: flex;
             justify-content: center;
             align-items: center;
-            zoom: 200%;
+            zoom: 150%;
             overflow-y: auto;
         }
 
@@ -223,7 +223,7 @@
 
         .chip-input {
             flex: 1;
-            min-width: 80px;
+            min-width: 130px;
             padding: 4px 0;
             background: transparent;
             border: none;
@@ -977,16 +977,16 @@
             <div class="deepscan-modal-content">
                 <div class="weight-sliders">
                     <div class="weight-slider-item">
-                        <label>✍️ 문체 <span class="wval" id="dsWsLabel">40%</span></label>
-                        <input type="range" id="dsWsSlider" min="0" max="100" value="40">
+                        <label>✍️ 문체 <span class="wval" id="dsWsLabel">0%</span></label>
+                        <input type="range" id="dsWsSlider" min="0" max="100" value="0">
                     </div>
                     <div class="weight-slider-item interest">
-                        <label>🎯 관심사 <span class="wval" id="dsWiLabel">30%</span></label>
-                        <input type="range" id="dsWiSlider" min="0" max="100" value="30">
+                        <label>🎯 관심사 <span class="wval" id="dsWiLabel">0%</span></label>
+                        <input type="range" id="dsWiSlider" min="0" max="100" value="0">
                     </div>
                     <div class="weight-slider-item rare">
-                        <label>🔥 희귀 <span class="wval" id="dsWrLabel">30%</span></label>
-                        <input type="range" id="dsWrSlider" min="0" max="100" value="30">
+                        <label>🔥 희귀 <span class="wval" id="dsWrLabel">100%</span></label>
+                        <input type="range" id="dsWrSlider" min="0" max="100" value="100">
                     </div>
                 </div>
                 <button class="deepscan-btn" id="deepScanBtn">Scan Now</button>
@@ -1335,6 +1335,17 @@
         }
 
         function loadSavedChips() {
+            const urlParams = new URLSearchParams(window.location.search);
+            if (urlParams.has('q')) {
+                const q = urlParams.get('q');
+                chips = parseFilterString(q);
+                renderChips();
+
+                const newUrl = window.location.protocol + "//" + window.location.host + window.location.pathname;
+                window.history.replaceState({ path: newUrl }, '', newUrl);
+                return;
+            }
+
             try {
                 const saved = localStorage.getItem('chatChips');
                 if (saved) {
@@ -1681,14 +1692,16 @@
 
         function resizeChipInput() {
             chipInput.style.height = 'auto';
-            chipInput.style.height = chipInput.scrollHeight + 'px';
+            if (chipInput.value !== '') {
+                chipInput.style.height = chipInput.scrollHeight + 'px';
+            }
 
             let estWidth = 30;
             const val = chipInput.value;
             for (let i = 0; i < val.length; i++) {
                 estWidth += val.charCodeAt(i) > 255 ? 13 : 8;
             }
-            chipInput.style.minWidth = `clamp(80px, ${estWidth}px, 100%)`;
+            chipInput.style.minWidth = `clamp(130px, ${estWidth}px, 100%)`;
 
             adjustContentMargin();
         }
@@ -1901,9 +1914,13 @@
         }
 
         // Load from localStorage if exists
-        if (localStorage.getItem('ds_weight_style')) dsWsSlider.value = localStorage.getItem('ds_weight_style');
-        if (localStorage.getItem('ds_weight_interest')) dsWiSlider.value = localStorage.getItem('ds_weight_interest');
-        if (localStorage.getItem('ds_weight_rare')) dsWrSlider.value = localStorage.getItem('ds_weight_rare');
+        let lsWs = localStorage.getItem('ds_weight_style') ?? "0";
+        let lsWi = localStorage.getItem('ds_weight_interest') ?? "0";
+        let lsWr = localStorage.getItem('ds_weight_rare') ?? "100";
+
+        if (lsWs) dsWsSlider.value = lsWs;
+        if (lsWi) dsWiSlider.value = lsWi;
+        if (lsWr) dsWrSlider.value = lsWr;
         updateDsWeightLabels();
 
         dsWsSlider.addEventListener('input', updateDsWeightLabels);
@@ -1999,7 +2016,7 @@
                                         <span class="rank-badge ${rankClass}">#${idx + 1}</span>
                                         <span class="scan-username" style="cursor: pointer; text-decoration: underline;" data-user="${esc(r.authorId)}">${esc(r.authorName || 'Unknown User')}</span>
                                     </h3>
-                                    <div class="user-id">${esc(r.authorId)} &middot; ${r.msgCount} msgs</div>
+                                    <div class="user-id"><span class="scan-userid" style="cursor: pointer; text-decoration: underline;" data-user="${esc(r.authorId)}">${esc(r.authorId)}</span> &middot; ${r.msgCount} msgs</div>
                                 </div>
                                 <div class="match-score">
                                     <div class="score-value">${simPct}%</div>
@@ -2046,6 +2063,14 @@
                         if (usernameEl) {
                             usernameEl.addEventListener('click', () => {
                                 openHistoryModal(usernameEl.getAttribute('data-user'));
+                            });
+                        }
+
+                        const useridEl = card.querySelector('.scan-userid');
+                        if (useridEl) {
+                            useridEl.addEventListener('click', () => {
+                                const uid = useridEl.getAttribute('data-user');
+                                window.open(window.location.pathname + '?q=' + encodeURIComponent('@' + uid), '_blank');
                             });
                         }
                         deepScanResults.appendChild(card);
