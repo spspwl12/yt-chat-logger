@@ -227,15 +227,15 @@ async function destroyPool(p) {
         const pool = p.pool || p;
         if (pool._freeConnections) {
             for (const conn of pool._freeConnections.toArray()) {
-                try { conn.destroy(); } catch {}
+                try { conn.destroy(); } catch { }
             }
         }
         if (pool._allConnections) {
             for (const conn of pool._allConnections.toArray()) {
-                try { conn.destroy(); } catch {}
+                try { conn.destroy(); } catch { }
             }
         }
-        await p.end().catch(() => {});
+        await p.end().catch(() => { });
     } catch {
         // 무시
     }
@@ -530,20 +530,20 @@ async function createLive(id, reset) {
         if (msg.includes("was not found") || msg.includes("liveChatContinuation")) {
             return;
         }
-        if (err.status == 400 || err.status == 403) {
-            if (++yt[id].msgerr >= 10) {
-                yt[id].obj && yt[id].obj.stop();
-            }
+        //if (err.status == 400 || err.status == 403) {
+        if (++yt[id].msgerr >= 10) {
+            yt[id].obj && yt[id].obj.stop();
         }
+        //}
         // 503(일시적 오류)은 무시, 나머지만 간략 출력
-        if (err.status != 503) {
-            console.error(`[YT] Error ${id}: ${errSummary(err)}`);
-        }
+        // if (err.status != 503) {
+        //     console.error(`[YT] Error ${id}: ${errSummary(err)}`);
+        // }
     });
 
     liveChat.on("end", (reason) => {
         console.log("[YT] Disconnected:", id, reason);
-        if (++yt[id].error < 5) {
+        if (++yt[id].error < 2) {
             const err = yt[id].error;
             setTimeout(createLive, 1000 * (err * err), id, false);
             console.log("[YT] Reconnecting:", id, `(attempt ${err})`);
@@ -625,30 +625,95 @@ async function queryChat(req, res, direction) {
     idConditions.push(isDown ? "c.id < ?" : "c.id >= ?");
     idParams.push(start);
 
-    for (const f of filters) {
+    let seqSqlParts = [];
+    let seqParams = [];
+    let expectOperator = false;
+    let openCount = 0;
+
+    for (let i = 0; i < filters.length; i++) {
+        const f = filters[i];
+        let logic = f.logic || 'AND';
+
+        // Backward compatibility
+        if (f.type === 'text_or') { f.type = 'text'; logic = 'OR'; }
+        if (f.type === 'text_not') { f.type = 'text'; logic = 'NOT'; }
+
+        if (f.type === 'group_start') {
+            if (expectOperator) {
+                if (logic === 'OR') seqSqlParts.push("OR");
+                else if (logic === 'NOT') seqSqlParts.push("AND NOT");
+                else seqSqlParts.push("AND");
+            } else {
+                if (logic === 'NOT') seqSqlParts.push("NOT");
+            }
+            seqSqlParts.push("(");
+            openCount++;
+            expectOperator = false;
+            continue;
+        }
+
+        if (f.type === 'group_end') {
+            if (openCount > 0) {
+                seqSqlParts.push(")");
+                openCount--;
+                expectOperator = true;
+            }
+            continue;
+        }
+
+        let sql = "";
+        let params = [];
+
         switch (f.type) {
             case "channel":
-                idConditions.push("c.channel = ?");
-                idParams.push(f.value);
+                sql = "c.channel = ?";
+                params.push(f.value);
                 break;
             case "text":
-                idConditions.push("MATCH(c.msgdata) AGAINST(? IN BOOLEAN MODE)");
-                idParams.push(searchTokMessage(f.value));
+                const tok = searchTokMessage(f.value);
+                if (tok.trim() !== '') {
+                    sql = "MATCH(c.msgdata) AGAINST(? IN BOOLEAN MODE)";
+                    params.push(tok);
+                }
                 break;
             case "author":
-                // author는 youtube_user_names에 있으므로 서브쿼리로 nid를 먼저 찾음
-                idConditions.push("c.nid IN (SELECT nid FROM youtube_user_names WHERE author = ? OR authorAlt = ?)");
-                idParams.push(f.value, f.value);
+                sql = "c.nid IN (SELECT nid FROM youtube_user_names WHERE author = ? OR authorAlt = ?)";
+                params.push(f.value, f.value);
                 break;
             case "userId":
-                // userId는 youtube_users → youtube_user_names 경유
-                idConditions.push("c.nid IN (SELECT n2.nid FROM youtube_user_names n2 JOIN youtube_users u2 ON n2.uid = u2.uid WHERE u2.authorId = ?)");
-                idParams.push(f.value);
+                sql = "c.nid IN (SELECT n2.nid FROM youtube_user_names n2 JOIN youtube_users u2 ON n2.uid = u2.uid WHERE u2.authorId = ?)";
+                params.push(f.value);
                 break;
             case "superchat":
-                idConditions.push("(c.flag & 16) != 0");
+                sql = "(c.flag & 16) != 0";
                 break;
         }
+
+        if (!sql) continue;
+
+        if (expectOperator) {
+            if (logic === 'OR') seqSqlParts.push("OR");
+            else if (logic === 'NOT') seqSqlParts.push("AND NOT");
+            else seqSqlParts.push("AND");
+        } else {
+            if (logic === 'NOT') seqSqlParts.push("NOT");
+        }
+
+        seqSqlParts.push(`(${sql})`);
+        seqParams.push(...params);
+        expectOperator = true;
+    }
+
+    while (openCount > 0) {
+        seqSqlParts.push(")");
+        openCount--;
+    }
+
+    if (seqSqlParts.length > 0) {
+        let finalStr = seqSqlParts.join(" ");
+        finalStr = finalStr.replace(/\(\s*\)/g, "(1=1)");
+        idConditions.push(`(${finalStr})`);
+        idParams.push(...seqParams);
     }
 
     const order = isDown ? "DESC" : "ASC";

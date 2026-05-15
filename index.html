@@ -101,6 +101,15 @@
             font-size: 12px;
             white-space: nowrap;
             animation: chipIn 0.2s ease;
+            max-width: 100%;
+            min-width: 0;
+        }
+
+        .chip-label {
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            min-width: 0;
         }
 
         @keyframes chipIn {
@@ -115,14 +124,42 @@
             }
         }
 
+        .chip.text {
+            background: #2d1b3d;
+            color: #d49aff;
+        }
+
         .chip.channel {
             background: #1a3a5c;
             color: #7cb8ff;
         }
 
-        .chip.text {
-            background: #2a2a2a;
-            color: #ccc;
+        .logic-badge {
+            font-size: 9px;
+            padding: 1px 4px;
+            border-radius: 4px;
+            margin-right: 4px;
+            font-weight: 800;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+        }
+        .logic-AND { background: rgba(124, 184, 255, 0.2); color: #7cb8ff; border: 1px solid rgba(124, 184, 255, 0.4); }
+        .logic-OR { background: rgba(209, 154, 239, 0.2); color: #d19aef; border: 1px solid rgba(209, 154, 239, 0.4); }
+        .logic-NOT { background: rgba(255, 140, 140, 0.2); color: #ff8c8c; border: 1px solid rgba(255, 140, 140, 0.4); }
+        
+        .chip-type-select {
+            padding: 4px 6px;
+            background: #1e1e1e;
+            border: 1px solid #404040;
+            border-radius: 10px;
+            color: #aaa;
+            font-size: 11px;
+            outline: none;
+            cursor: pointer;
+            flex-shrink: 0;
+            font-family: sans-serif;
         }
 
         .chip.author {
@@ -146,6 +183,7 @@
             line-height: 1;
             opacity: 0.6;
             transition: opacity 0.2s;
+            flex-shrink: 0;
         }
 
         .chip-remove:hover {
@@ -177,6 +215,9 @@
             color: #fff;
             font-size: 13px;
             outline: none;
+            resize: none;
+            overflow: hidden;
+            font-family: inherit;
         }
 
         .chip-input::placeholder {
@@ -593,6 +634,9 @@
         .keyword-tag.rare-tag { background: rgba(249,115,22,0.1); border-color: rgba(249,115,22,0.3); color: #fdba74; }
         .df-badge { font-size: 9px; background: rgba(255,255,255,0.08); padding: 1px 4px; border-radius: 2px; margin-left: 4px; color: #a1a1aa; }
         .section-label { font-size: 10px; font-weight: 600; color: #a1a1aa; width: 100%; margin-top: 4px; }
+        .chip.group-1 { border: 2px solid #ef4444; }
+        .chip.group-2 { border: 2px solid #3b82f6; }
+        .chip.group-3 { border: 2px solid #22c55e; }
         
         .rank-badge { font-size: 10px; padding: 2px 6px; border-radius: 4px; font-weight: 600; }
         .rank-1 { background: rgba(239,68,68,0.15); color: #ef4444; border: 1px solid rgba(239,68,68,0.3); }
@@ -614,13 +658,20 @@
             <div class="search-container">
                 <div class="chip-input-area" id="chipInputArea">
                     <select id="chipTypeSelect" class="chip-type-select">
-                        <option value="text">검색</option>
-                        <option value="channel">채널</option>
-                        <option value="userId">유저ID</option>
-                        <option value="author">작성자</option>
-                        <option value="superchat">슈퍼챗</option>
+                        <option value="" disabled selected hidden>➕ 조건 추가</option>
+                        <optgroup label="조건">
+                            <option value="AND|text">그리고</option>
+                            <option value="OR|text">또는</option>
+                            <option value="NOT|text">제외</option>
+                        </optgroup>
+                        <optgroup label="일반">
+                            <option value="AND|channel">채널</option>
+                            <option value="AND|userId">유저ID</option>
+                            <option value="AND|author">작성자</option>
+                            <option value="AND|superchat">슈퍼챗</option>
+                        </optgroup>
                     </select>
-                    <input type="text" class="chip-input" id="chipInput" placeholder="검색어 입력 후 Enter">
+                    <textarea class="chip-input" id="chipInput" rows="1" placeholder="검색어 입력 후 Enter"></textarea>
                 </div>
             </div>
         </div>
@@ -630,6 +681,13 @@
     <div id="contextMenu" class="context-menu">
         <div class="context-menu-item" id="contextMenuHistory">사용자 닉네임 + 프로필사진 변경 이력</div>
         <div class="context-menu-item" id="contextMenuDeepScan">동일인물 찾기 (Deep Scan)</div>
+    </div>
+
+    <div id="chipContextMenu" class="context-menu">
+        <div class="context-menu-item" id="chipMenuG1">🔴 그룹 1 지정</div>
+        <div class="context-menu-item" id="chipMenuG2">🔵 그룹 2 지정</div>
+        <div class="context-menu-item" id="chipMenuG3">🟢 그룹 3 지정</div>
+        <div class="context-menu-item" id="chipMenuClear">⚪ 그룹 해제</div>
     </div>
 
     <div id="historyModalOverlay" class="history-modal-overlay">
@@ -714,46 +772,169 @@
         let lastID = 999999999999999;
         let chips = [];
 
-        function makeChip(type, value) {
+        function makeChip(type, logic, value) {
+            logic = logic || 'AND';
             if (type === 'superchat')
-                return { type: 'superchat', value: '', label: '슈퍼챗' };
+                return { type, logic, value: '', label: '슈퍼챗' };
             if (!value) return null;
-            const label = (CHIP_LABELS[type] || type) + ': ' + value;
-            return { type, value, label };
+            const labelText = CHIP_LABELS[type] || type;
+            const label = labelText + ': ' + value;
+            return { type, logic, value, label };
         }
 
-        function parseChipFromText(text) {
-            const t = text.trim();
-            if (!t) return null;
-            if (/^(ch|channel):/.test(t)) return makeChip('channel', t.replace(/^(ch|channel):/, ''));
-            if (t.startsWith('@') || t.startsWith('user:')) return makeChip('userId', t.replace(/^(@|user:)/, ''));
-            if (t.startsWith('author:')) return makeChip('author', t.replace(/^author:/, ''));
-            if (t === 'superchat' || t === 'sc') return makeChip('superchat', '');
-            return null;
+        function chipsToText(chipArray) {
+            if (!chipArray || chipArray.length === 0) return '';
+            return chipArray.map((c, i) => {
+                let prefix = '';
+                if (c.logic === 'OR') prefix = 'OR ';
+                else if (c.logic === 'NOT') prefix = '-';
+                
+                if (i === 0 && c.logic !== 'NOT') {
+                    prefix = '';
+                }
+                
+                if (c.type === 'group_start') return prefix + '(';
+                if (c.type === 'group_end') return ')';
+                if (c.type === 'superchat') return prefix + 'is:슈퍼챗';
+                
+                let label = CHIP_LABELS[c.type] || c.type;
+                let val = c.value || '';
+                if (val.includes(' ') || val.includes('"')) {
+                    val = `"${val.replace(/"/g, '""')}"`;
+                }
+                
+                return `${prefix}${label}:${val}`;
+            }).join(' ');
+        }
+
+        function parseFilterString(str) {
+            const tokens = [];
+            let current = '';
+            let inQuote = false;
+            for (let i = 0; i < str.length; i++) {
+                const c = str[i];
+                if (c === '"') {
+                    inQuote = !inQuote;
+                    current += c;
+                } else if (c === ' ' && !inQuote) {
+                    if (current.trim()) tokens.push(current.trim());
+                    current = '';
+                } else {
+                    current += c;
+                }
+            }
+            if (current.trim()) tokens.push(current.trim());
+            
+            let newChips = [];
+            let pendingLogic = 'AND';
+            let explicitLogic = false;
+            
+            for (let i = 0; i < tokens.length; i++) {
+                let t = tokens[i];
+                if (t.toUpperCase() === 'AND') { pendingLogic = 'AND'; explicitLogic = true; continue; }
+                if (t.toUpperCase() === 'OR') { pendingLogic = 'OR'; explicitLogic = true; continue; }
+                if (t.toUpperCase() === 'NOT') { pendingLogic = 'NOT'; explicitLogic = true; continue; }
+                
+                let logic = pendingLogic;
+                if (t.toLowerCase().startsWith('or:')) { logic = 'OR'; t = t.substring(3); explicitLogic = true; }
+                else if (t.toLowerCase().startsWith('not:')) { logic = 'NOT'; t = t.substring(4); explicitLogic = true; }
+                else if (t.startsWith('-')) { logic = 'NOT'; t = t.substring(1); explicitLogic = true; }
+                
+                pendingLogic = 'AND';
+                
+                if (t === '(') {
+                    newChips.push(makeChip('group_start', logic, ''));
+                    explicitLogic = false;
+                    continue;
+                }
+                if (t === ')') {
+                    newChips.push(makeChip('group_end', 'AND', ''));
+                    explicitLogic = false;
+                    continue;
+                }
+                
+                let type = 'text';
+                let val = t;
+                
+                const colonIdx = t.indexOf(':');
+                if (colonIdx > 0 && !t.startsWith('"')) {
+                    const prefix = t.toLowerCase().substring(0, colonIdx);
+                    const rest = t.substring(colonIdx + 1);
+                    if (['ch','channel','채널'].includes(prefix)) { type = 'channel'; val = rest; }
+                    else if (['@','user','유저','유저id'].includes(prefix)) { type = 'userId'; val = rest; }
+                    else if (['author','작성자'].includes(prefix)) { type = 'author'; val = rest; }
+                    else if (['text','검색'].includes(prefix)) { type = 'text'; val = rest; }
+                    else if (['is','has','타입'].includes(prefix) && ['sc','superchat','슈퍼챗'].includes(rest.toLowerCase())) { type = 'superchat'; val = ''; }
+                } else if (t.startsWith('@')) {
+                    type = 'userId';
+                    val = t.substring(1);
+                }
+                
+                let wasQuoted = false;
+                if (val.startsWith('"') && val.endsWith('"') && val.length >= 2) {
+                    val = val.substring(1, val.length - 1).replace(/""/g, '"');
+                    wasQuoted = true;
+                }
+                
+                const chip = makeChip(type, logic, val);
+                if (chip) {
+                    chip.wasQuoted = wasQuoted;
+                    chip.explicitLogic = explicitLogic;
+                    newChips.push(chip);
+                }
+                
+                explicitLogic = false;
+            }
+
+            const compressed = [];
+            for (let i = 0; i < newChips.length; i++) {
+                const c = newChips[i];
+                if (compressed.length > 0) {
+                    const prev = compressed[compressed.length - 1];
+                    if (prev.type === 'text' && c.type === 'text' && c.logic === 'AND' && !c.explicitLogic && !prev.wasQuoted && !c.wasQuoted) {
+                        prev.value += ' ' + c.value;
+                        prev.label = (CHIP_LABELS['text'] || '검색') + ': ' + prev.value;
+                        continue;
+                    }
+                }
+                compressed.push(c);
+            }
+            newChips = compressed;
+
+            if (chips && chips.length > 0) {
+                newChips.forEach(nc => {
+                    const match = chips.find(oc => oc.type === nc.type && oc.value === nc.value && oc.logic === nc.logic && oc.group);
+                    if (match) nc.group = match.group;
+                });
+            }
+            
+            return newChips;
         }
 
         function addChipBySelect(value, skipLoad) {
-            const type = chipTypeSelect.value;
-            const chip = makeChip(type, value);
+            const valSplit = chipTypeSelect.value.split('|');
+            const logic = valSplit[0];
+            const type = valSplit[1];
+            const chip = makeChip(type, logic, value);
             if (!chip) return;
-            if (chips.some(c => c.type === chip.type && c.value === chip.value)) return;
             chips.push(chip);
             renderChips();
             saveChips();
             if (!skipLoad) load(true, 0, "down");
         }
 
+        // addChip is now mostly unused since we parse everything on blur, but kept for compatibility just in case
         function addChip(text, skipLoad) {
-            const parsed = parseChipFromText(text);
-            if (parsed) {
-                if (chips.some(c => c.type === parsed.type && c.value === parsed.value)) return;
-                chips.push(parsed);
-            } else {
-                const chip = makeChip('text', text.trim());
-                if (!chip) return;
-                if (chips.some(c => c.type === chip.type && c.value === chip.value)) return;
-                chips.push(chip);
-            }
+            const newChips = parseFilterString(text);
+            newChips.forEach(nc => {
+                if (nc.type !== 'group_start' && nc.type !== 'group_end') {
+                    if (!chips.some(c => c.type === nc.type && c.value === nc.value && c.logic === nc.logic)) {
+                        chips.push(nc);
+                    }
+                } else {
+                    chips.push(nc);
+                }
+            });
             renderChips();
             saveChips();
             if (!skipLoad) load(true, 0, "down");
@@ -773,12 +954,74 @@
             if (!skipLoad) load(true, 0, "down");
         }
 
+        let contextChipIndex = -1;
+        const chipContextMenu = document.getElementById('chipContextMenu');
+
+        document.getElementById('chipMenuG1').addEventListener('click', () => setChipGroup(1));
+        document.getElementById('chipMenuG2').addEventListener('click', () => setChipGroup(2));
+        document.getElementById('chipMenuG3').addEventListener('click', () => setChipGroup(3));
+        document.getElementById('chipMenuClear').addEventListener('click', () => setChipGroup(null));
+
+        function setChipGroup(groupId) {
+            chipContextMenu.style.display = 'none';
+            if (contextChipIndex >= 0 && contextChipIndex < chips.length) {
+                chips[contextChipIndex].group = groupId;
+                renderChips();
+                saveChips();
+                load(true, 0, "down");
+            }
+        }
+
         function renderChips() {
             chipInputArea.querySelectorAll('.chip').forEach(el => el.remove());
             chips.forEach((chip, i) => {
                 const el = document.createElement('span');
-                el.className = 'chip ' + chip.type;
-                el.innerHTML = chip.label + '<span class="chip-remove" data-index="' + i + '">&times;</span>';
+                el.className = 'chip ' + (chip.type === 'text' ? 'text' : chip.type);
+                if (chip.group) {
+                    el.classList.add('group-' + chip.group);
+                }
+                
+                let logicBadge = '';
+                if (chip.logic === 'OR') logicBadge = '<span class="logic-badge logic-OR">또는</span>';
+                else if (chip.logic === 'NOT') logicBadge = '<span class="logic-badge logic-NOT">제외</span>';
+                else logicBadge = '<span class="logic-badge logic-AND">그리고</span>';
+                
+                if (i === 0 && chip.logic !== 'NOT') {
+                    logicBadge = '';
+                }
+                
+                el.innerHTML = logicBadge;
+                const labelSpan = document.createElement('span');
+                labelSpan.className = 'chip-label';
+                labelSpan.textContent = chip.label;
+                el.appendChild(labelSpan);
+                const removeSpan = document.createElement('span');
+                removeSpan.className = 'chip-remove';
+                removeSpan.setAttribute('data-index', i);
+                removeSpan.innerHTML = '&times;';
+                el.appendChild(removeSpan);
+                
+                el.addEventListener('contextmenu', (e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    contextChipIndex = i;
+                    chipContextMenu.style.display = 'block';
+                    
+                    const zoomLevel = parseFloat(getComputedStyle(document.body).zoom) || 1;
+                    let left = e.clientX / zoomLevel;
+                    let top = e.clientY / zoomLevel;
+                    
+                    const rect = chipContextMenu.getBoundingClientRect();
+                    if (e.clientX + rect.width * zoomLevel > window.innerWidth) {
+                        left -= rect.width;
+                    }
+                    if (e.clientY + rect.height * zoomLevel > window.innerHeight) {
+                        top -= rect.height;
+                    }
+                    
+                    chipContextMenu.style.left = Math.max(0, left) + 'px';
+                    chipContextMenu.style.top = Math.max(0, top) + 'px';
+                });
                 chipInputArea.insertBefore(el, chipInput);
             });
             adjustContentMargin();
@@ -791,14 +1034,46 @@
         function loadSavedChips() {
             try {
                 const saved = localStorage.getItem('chatChips');
-                if (saved) { chips = JSON.parse(saved); renderChips(); }
+                if (saved) { 
+                    chips = JSON.parse(saved); 
+                    // migrate old chips to new format
+                    chips.forEach(c => {
+                        if (c.type === 'text_or') { c.type = 'text'; c.logic = 'OR'; }
+                        else if (c.type === 'text_not') { c.type = 'text'; c.logic = 'NOT'; }
+                        if (!c.logic) c.logic = 'AND';
+                        
+                        // Fix old label text
+                        let baseLabel = CHIP_LABELS[c.type] || c.type;
+                        if (c.type === 'superchat') c.label = '슈퍼챗';
+                        else c.label = baseLabel + ': ' + c.value;
+                    });
+                    renderChips(); 
+                }
             } catch (e) { chips = []; }
         }
 
         function getFiltersParam() {
-            return encodeURIComponent(JSON.stringify(
-                chips.map(c => ({ type: c.type, value: c.value }))
-            ));
+            let transformed = [];
+            let currentGroup = null;
+            
+            chips.forEach(c => {
+                if (c.group !== currentGroup) {
+                    if (currentGroup) {
+                        transformed.push({ type: 'group_end', logic: 'AND', value: '' });
+                    }
+                    if (c.group) {
+                        transformed.push({ type: 'group_start', logic: c.logic, value: '' });
+                    }
+                }
+                transformed.push({...c});
+                currentGroup = c.group;
+            });
+            
+            if (currentGroup) {
+                transformed.push({ type: 'group_end', logic: 'AND', value: '' });
+            }
+            
+            return encodeURIComponent(JSON.stringify(transformed));
         }
 
         function decodeMessage(b64) {
@@ -1063,10 +1338,26 @@
             content.style.paddingTop = (header.offsetHeight + 20) + 'px';
         }
 
+        function resizeChipInput() {
+            chipInput.style.height = 'auto';
+            chipInput.style.height = chipInput.scrollHeight + 'px';
+            
+            let estWidth = 30;
+            const val = chipInput.value;
+            for (let i = 0; i < val.length; i++) {
+                estWidth += val.charCodeAt(i) > 255 ? 13 : 8;
+            }
+            chipInput.style.minWidth = `clamp(80px, ${estWidth}px, 100%)`;
+            
+            adjustContentMargin();
+        }
+        chipInput.addEventListener('input', resizeChipInput);
+
         // chip 클릭 이벤트 (삭제 버튼)
         chipInputArea.addEventListener('click', (e) => {
             if (e.target.classList.contains('chip-remove')) {
                 removeChip(parseInt(e.target.getAttribute('data-index')));
+                return;
             }
             if (e.target !== chipTypeSelect) {
                 chipInput.focus();
@@ -1075,26 +1366,94 @@
 
         // 콤보박스 변경 이벤트
         chipTypeSelect.addEventListener('change', () => {
-            const type = chipTypeSelect.value;
-            chipInput.placeholder = CHIP_PLACEHOLDERS[type] || '';
-            if (type === 'superchat') {
-                addChipBySelect('', false);
-                chipTypeSelect.value = 'text';
-                chipInput.placeholder = CHIP_PLACEHOLDERS['text'];
-            } else {
+            const valSplit = chipTypeSelect.value.split('|');
+            const logic = valSplit[0];
+            const type = valSplit[1];
+            
+            if (document.activeElement !== chipInput) {
                 chipInput.focus();
             }
+            
+            setTimeout(() => {
+                let appendStr = '';
+                if (logic === 'OR') appendStr += 'OR ';
+                else if (logic === 'NOT') appendStr += '-';
+                else if (logic === 'AND' && type === 'text') appendStr += 'AND ';
+                
+                if (type === 'superchat') appendStr += 'is:슈퍼챗 ';
+                else if (type !== 'text') {
+                    const label = CHIP_LABELS[type] || type;
+                    appendStr += label + ':';
+                }
+                
+                const caretPos = chipInput.selectionStart;
+                const textBefore = chipInput.value.substring(0, caretPos);
+                const textAfter = chipInput.value.substring(caretPos);
+                
+                let prefix = '';
+                let suffix = '';
+                if (textBefore.length > 0 && !textBefore.endsWith(' ')) prefix = ' ';
+                if (textAfter.length > 0 && !textAfter.startsWith(' ')) suffix = ' ';
+                
+                chipInput.value = textBefore + prefix + appendStr + suffix + textAfter;
+                chipInput.selectionStart = chipInput.selectionEnd = caretPos + prefix.length + appendStr.length;
+                
+                chipTypeSelect.value = '';
+                resizeChipInput();
+            }, 10);
+        });
+
+        let isEditingText = false;
+        let originalText = '';
+
+        chipInput.addEventListener('focus', () => {
+            if (!isEditingText) {
+                isEditingText = true;
+                document.querySelectorAll('.chip').forEach(el => el.style.display = 'none');
+                const text = chipsToText(chips);
+                originalText = text;
+                chipInput.value = text + (text.length > 0 ? ' ' : '');
+                resizeChipInput();
+                
+                // 마우스 클릭 위치에 따라 캐럿이 중간에 생기는 현상 방지 (무조건 맨 끝으로 이동)
+                setTimeout(() => {
+                    chipInput.selectionStart = chipInput.selectionEnd = chipInput.value.length;
+                }, 0);
+            }
+        });
+
+        chipInput.addEventListener('blur', () => {
+            setTimeout(() => {
+                if (chipInputArea.contains(document.activeElement)) {
+                    return;
+                }
+                const text = chipInput.value.trim();
+                if (text !== originalText.trim()) {
+                    // 텍스트가 수정되었다면, 엔터를 치기 전까지 칩으로 돌아가지 않고 텍스트 모드 유지
+                    return;
+                }
+                
+                isEditingText = false;
+                chipInput.value = '';
+                resizeChipInput();
+                renderChips();
+            }, 10);
         });
 
         // chip 입력 이벤트
         chipInput.addEventListener('keydown', (e) => {
-            if (e.key === 'Enter' && chipInput.value.trim()) {
+            if (e.key === 'Enter') {
                 e.preventDefault();
-                addChipBySelect(chipInput.value.trim());
-                chipInput.value = '';
-            }
-            if (e.key === 'Backspace' && !chipInput.value && chips.length > 0) {
-                removeChip(chips.length - 1);
+                if (isEditingText) {
+                    const text = chipInput.value.trim();
+                    if (text !== originalText.trim()) {
+                        chips = parseFilterString(text);
+                        saveChips();
+                        load(true, 0, "down");
+                        originalText = text; // 블러 이벤트에서 칩으로 정상적으로 돌아가도록 동기화
+                    }
+                }
+                chipInput.blur();
             }
         });
 
@@ -1102,6 +1461,10 @@
         document.addEventListener('click', (e) => {
             if (e.target !== contextMenu && !contextMenu.contains(e.target)) {
                 contextMenu.style.display = 'none';
+            }
+            const chipContextMenu = document.getElementById('chipContextMenu');
+            if (chipContextMenu && e.target !== chipContextMenu && !chipContextMenu.contains(e.target)) {
+                chipContextMenu.style.display = 'none';
             }
         });
 
@@ -1330,13 +1693,13 @@
         // 초기화
         loadSavedChips();
         window.addEventListener('scroll', onScroll);
-        window.addEventListener('resize', adjustContentMargin);
+        window.addEventListener('resize', resizeChipInput);
         mainLogo.addEventListener('mousedown', (e) => {
             e.preventDefault();
             clearChips();
         });
+        resizeChipInput();
         load(false, 0, "down");
-        adjustContentMargin();
     </script>
 </body>
 
