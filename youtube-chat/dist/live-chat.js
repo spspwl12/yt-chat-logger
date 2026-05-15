@@ -44,7 +44,7 @@ class LiveChat extends events_1.EventEmitter {
                 return false;
             }
             this._stopped = false;
-            const maxStartRetries = 5;
+            const maxStartRetries = 1;
             for (let attempt = 0; attempt < maxStartRetries; attempt++) {
                 if (this._stopped) return false;
                 try {
