@@ -766,6 +766,16 @@
             text-decoration: underline;
         }
 
+        .chat-rate-badge {
+            font-size: 10px;
+            color: #888;
+            white-space: nowrap;
+            flex-shrink: 0;
+            font-family: monospace;
+            min-width: 36px;
+            text-align: right;
+        }
+
         .channel-item-actions {
             display: flex;
             gap: 6px;
@@ -2511,6 +2521,52 @@
         const channelList = document.getElementById('channelList');
         const channelModalStatus = document.getElementById('channelModalStatus');
 
+        // 채팅 속도 폴링
+        let chatRateTimer = null;
+        let chatRateData = {};
+
+        async function fetchChatRate() {
+            try {
+                const res = await fetch('/rate');
+                if (res.ok) chatRateData = await res.json();
+            } catch { /* 무시 */ }
+            updateChatRateBadges();
+        }
+
+        function updateChatRateBadges() {
+            channelList.querySelectorAll('.channel-item').forEach(el => {
+                const id = el.getAttribute('data-channel-id');
+                const badge = el.querySelector('.chat-rate-badge');
+                if (!badge) return;
+
+                const last = (chatRateData.last || {});
+                const current = (chatRateData.current || {});
+                const elapsed = chatRateData.elapsed || 0;
+
+                const lastCnt = last[id] || 0;
+                const curCnt = current[id] || 0;
+
+                // 확정값이 있으면 확정값 표시, 없으면 현재 집계중 표시
+                if (lastCnt > 0) {
+                    badge.textContent = lastCnt + '/60초';
+                } else if (curCnt > 0) {
+                    badge.textContent = curCnt + '/' + elapsed + '초';
+                } else {
+                    badge.textContent = '0/' + elapsed + '초';
+                }
+            });
+        }
+
+        function startChatRatePolling() {
+            fetchChatRate();
+            chatRateTimer = setInterval(fetchChatRate, 5000);
+        }
+
+        function stopChatRatePolling() {
+            if (chatRateTimer) { clearInterval(chatRateTimer); chatRateTimer = null; }
+            chatRateData = {};
+        }
+
         // YouTube URL / ID 파싱
         function parseYouTubeId(raw) {
             const s = raw.trim();
@@ -2579,9 +2635,13 @@
                 const el = document.createElement('div');
                 el.className = 'channel-item';
                 el.setAttribute('data-channel-id', id);
+                const rateCnt = ((chatRateData.last || {})[id]) || ((chatRateData.current || {})[id]) || 0;
+                const rateElapsed = chatRateData.elapsed || 0;
+                const rateLabel = rateCnt > 0 && (chatRateData.last || {})[id] ? rateCnt + '/60초' : rateCnt + '/' + rateElapsed + '초';
                 el.innerHTML = `
                     <div class="channel-item-dot"></div>
                     <span class="channel-item-id" title="${id}">${id}</span>
+                    <span class="chat-rate-badge">${rateLabel}</span>
                     <div class="channel-item-actions">
                         <button class="channel-filter-btn">필터</button>
                         <button class="channel-delete-btn">삭제</button>
@@ -2681,11 +2741,13 @@
             channelAddInput.value = '';
             setChannelStatus('', 'info');
             renderChannelList();
+            startChatRatePolling();
             setTimeout(() => channelAddInput.focus(), 100);
         }
 
         function closeChannelModal() {
             channelModalOverlay.style.display = 'none';
+            stopChatRatePolling();
         }
 
         channelModalClose.addEventListener('click', closeChannelModal);

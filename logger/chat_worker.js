@@ -5,14 +5,56 @@ const { parentPort, workerData } = require('worker_threads');
 const { LiveChat } = require("./youtube-chat");
 const crypto = require("crypto");
 const zlib = require("zlib");
-const fs = require('fs');
-const path = require('path');
 const mecab = require('./mecab-ya.js');
 
-const EMERGENCY_LOG = path.join(__dirname, '../chat_emergency.ndjson');
-const MAX_EMERGENCY_SIZE = 100 * 1024 * 1024; // 100MB
-
 const yt = {};
+
+// ─── 채널별 채팅 속도 집계 (더블 버퍼, 60초) ───
+const RATE_WINDOW_MS = 60 * 1000;
+let currentCounts = {};   // 현재 집계 중
+let lastCounts = {};      // 이전 60초 확정값
+let windowStartTime = Date.now();
+
+// 60초마다 버퍼 스왑
+setInterval(() => {
+    lastCounts = currentCounts;
+    currentCounts = {};
+    windowStartTime = Date.now();
+}, RATE_WINDOW_MS);
+
+// 채팅 수신 시 단순 카운트 증가 (O(1))
+function recordChat(id) {
+    currentCounts[id] = (currentCounts[id] || 0) + 1;
+}
+
+// 현재 카운트 반환: 확정값 + 현재 집계 중인 값 + 경과시간
+function getChatRates() {
+    const elapsed = Math.floor((Date.now() - windowStartTime) / 1000);
+    return {
+        last: { ...lastCounts },
+        current: { ...currentCounts },
+        elapsed
+    };
+}
+
+// ─── createLive 순차 실행 큐 ───
+let liveQueue = [];
+let isProcessingQueue = false;
+
+async function processLiveQueue() {
+    if (isProcessingQueue) return;
+    isProcessingQueue = true;
+    while (liveQueue.length > 0) {
+        const { id, reset } = liveQueue.shift();
+        await createLive(id, reset);
+    }
+    isProcessingQueue = false;
+}
+
+function enqueueLive(id, reset) {
+    liveQueue.push({ id, reset });
+    processLiveQueue();
+}
 
 function NVL(e) {
     return e ?? " ";
@@ -63,6 +105,7 @@ async function createLive(id, reset) {
     liveChat.on("chat", (chatItem) => {
         yt[id].error = 0;
         yt[id].msgerr = 0;
+        recordChat(id);
         const jstr = JSON.stringify(chatItem);
         const sid = crypto.createHash("sha256").update(jstr).digest("hex").substring(0, 32);
         const message = { m: chatItem.message, s: chatItem.superchat };
@@ -140,10 +183,21 @@ function deleteLive(id) {
 parentPort.on('message', (msg) => {
     switch (msg.type) {
         case 'createLive':
-            createLive(msg.id, msg.reset);
+            enqueueLive(msg.id, msg.reset);
+            break;
+        case 'createLiveAll':
+            // 배열로 받아 순차 연결
+            if (Array.isArray(msg.ids)) {
+                for (const id of msg.ids) {
+                    enqueueLive(id, msg.reset);
+                }
+            }
             break;
         case 'deleteLive':
             deleteLive(msg.id);
+            break;
+        case 'getRate':
+            parentPort.postMessage({ type: 'rateResult', data: getChatRates() });
             break;
         case 'ping':
             parentPort.postMessage({ type: 'pong' });

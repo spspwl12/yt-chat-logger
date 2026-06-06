@@ -119,10 +119,11 @@ function initChatWorker() {
         switch (msg.type) {
             case 'ready':
                 console.log('[Main] Chat Worker ready');
-                // 기존 라이브 채팅 복원
+                // 기존 라이브 채팅 복원 (순차 연결)
                 const data = readData();
-                for (const item of data) {
-                    chatWorker.postMessage({ type: 'createLive', id: item.id, reset: true });
+                const ids = data.map(item => item.id);
+                if (ids.length > 0) {
+                    chatWorker.postMessage({ type: 'createLiveAll', ids, reset: true });
                 }
                 break;
             case 'chat':
@@ -255,6 +256,27 @@ app.get('/status', (req, res) => {
         chatWorkerReady: chatWorker !== null,
         dbWorkerReady
     });
+});
+
+// ─── 채널별 채팅 속도 (chat_worker 집계) ───
+app.get('/rate', (req, res) => {
+    if (!chatWorker) return res.json({});
+
+    let responded = false;
+    const timeout = setTimeout(() => {
+        if (!responded) { responded = true; res.json({}); }
+        chatWorker.off('message', onMsg);
+    }, 2000);
+
+    function onMsg(msg) {
+        if (msg.type !== 'rateResult') return;
+        clearTimeout(timeout);
+        chatWorker.off('message', onMsg);
+        if (!responded) { responded = true; res.json(msg.data); }
+    }
+
+    chatWorker.on('message', onMsg);
+    chatWorker.postMessage({ type: 'getRate' });
 });
 
 // ─── 쿼리 최적화 함수들 ───

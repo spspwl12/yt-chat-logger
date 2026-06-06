@@ -1,5 +1,6 @@
 // ═══════════════════════════════════════════════════════════════
 // DB Worker: 버퍼 flush 전용 (독립 스레드)
+// 단일 ndjson 파일 버퍼: insert 실패/느림 → 파일 저장, 정상화 → flush
 // ═══════════════════════════════════════════════════════════════
 const { parentPort, workerData } = require('worker_threads');
 const mysql = require("mysql2/promise");
@@ -14,86 +15,92 @@ const DB_PASS = workerData.DB_PASS;
 const DB_SCHEMA = workerData.DB_SCHEMA;
 
 const DB_CONNECT_TIMEOUT = 60000;
-const DB_BUFFER_LIMIT = 500000;
-const BATCH_SIZE = 1000;
-const FLUSH_INTERVAL = 50;
-const COMPACT_THRESHOLD = 10000;
+const BATCH_SIZE = 5000;
+const FLUSH_INTERVAL = 10;
+const SLOW_INSERT_THRESHOLD_MS = 8000;
+const MAX_CACHE_SIZE = 500000;
+const OR_CHUNK_SIZE = 500;
 
-let dbBuffer = loadBufferFromFile();
+let dbBuffer = [];        // 메모리 버퍼 (정상 상태에서 사용)
 let flushIndex = 0;
 let dbConnected = false;
 let isFlushing = false;
 let poolVersion = 0;
 let flushTimer = null;
 let writePool = null;
-let isSyncing = false;
+let isInsertSlow = false;  // insert 느림 상태
 
 const userCache = new Map();
 
-// ─── 버퍼 파일 로드 ───
-function loadBufferFromFile() {
+// ─── userCache 크기 제한 ───
+function trimUserCache() {
+    if (userCache.size <= MAX_CACHE_SIZE) return;
+    const deleteCount = Math.floor(MAX_CACHE_SIZE / 2);
+    let count = 0;
+    for (const key of userCache.keys()) {
+        if (count >= deleteCount) break;
+        userCache.delete(key);
+        count++;
+    }
+}
+
+// ─── NDJSON 파일 유틸 ───
+function serializeItem(item) {
+    const obj = { ...item };
+    // Buffer 또는 Uint8Array 모두 base64로 변환
+    if (obj.message && (Buffer.isBuffer(obj.message) || obj.message instanceof Uint8Array)) {
+        obj.message = Buffer.from(obj.message).toString('base64');
+    }
+    return JSON.stringify(obj);
+}
+
+function deserializeItem(line) {
+    try {
+        const obj = JSON.parse(line);
+        if (obj.message) {
+            if (typeof obj.message === 'string') {
+                obj.message = Buffer.from(obj.message, 'base64');
+            } else if (typeof obj.message === 'object') {
+                // Uint8Array가 JSON으로 직렬화된 경우 {"0":72,"1":101,...} 복구
+                obj.message = Buffer.from(Object.values(obj.message));
+            }
+        }
+        if (obj.timestamp && typeof obj.timestamp === 'string') {
+            obj.timestamp = new Date(obj.timestamp);
+        }
+        return obj;
+    } catch { return null; }
+}
+
+// 파일에 append
+function appendToFile(items) {
+    try {
+        const lines = items.map(serializeItem);
+        fs.appendFileSync(BUFFER_FILE, lines.join('\n') + '\n');
+    } catch (err) {
+        console.error('[DBWorker] File append failed:', err.message);
+    }
+}
+
+// 파일에서 읽어오기 (읽은 후 파일 삭제)
+function loadFromFile() {
     try {
         if (!fs.existsSync(BUFFER_FILE)) return [];
         const content = fs.readFileSync(BUFFER_FILE, 'utf8').trim();
         if (!content) return [];
-        const items = content.split('\n').map(line => {
-            try {
-                const obj = JSON.parse(line);
-                if (obj.message && typeof obj.message === 'string') {
-                    obj.message = Buffer.from(obj.message, 'base64');
-                }
-                if (obj.timestamp && typeof obj.timestamp === 'string') {
-                    obj.timestamp = new Date(obj.timestamp);
-                }
-                return obj;
-            } catch { return null; }
-        }).filter(Boolean);
-        console.log(`[DBWorker] Loaded ${items.length} items from buffer file`);
+        const items = content.split('\n').map(deserializeItem).filter(Boolean);
+        fs.unlinkSync(BUFFER_FILE);
+        if (items.length > 0) {
+            console.log(`[DBWorker] Loaded ${items.length} items from file`);
+        }
         return items;
     } catch (err) {
-        console.error('[DBWorker] Failed to load buffer file:', err.message);
+        console.error('[DBWorker] File load failed:', err.message);
         return [];
     }
 }
 
-// ─── 버퍼 파일 동기화 ───
-function syncBufferFile() {
-    if (isSyncing) return;
-    try {
-        const pending = dbBuffer.slice(flushIndex);
-        if (pending.length === 0) {
-            if (fs.existsSync(BUFFER_FILE)) {
-                fs.unlink(BUFFER_FILE, () => { });
-            }
-            return;
-        }
-        isSyncing = true;
-        const lines = pending.map(item => {
-            const obj = { ...item };
-            if (Buffer.isBuffer(obj.message)) {
-                obj.message = obj.message.toString('base64');
-            }
-            return JSON.stringify(obj);
-        });
-        fs.writeFile(BUFFER_FILE, lines.join('\n') + '\n', (err) => {
-            isSyncing = false;
-            if (err) console.error('[DBWorker] Failed to sync buffer file:', err.message);
-        });
-    } catch (err) {
-        isSyncing = false;
-        console.error('[DBWorker] Error syncing buffer:', err.message);
-    }
-}
-
-
-
-function compactBuffer() {
-    if (flushIndex >= COMPACT_THRESHOLD) {
-        dbBuffer = dbBuffer.slice(flushIndex);
-        flushIndex = 0;
-    }
-}
-
+// ─── DB 연결 ───
 function getConnectionWithTimeout(thePool, timeoutMs) {
     return new Promise((resolve, reject) => {
         const timer = setTimeout(() => {
@@ -191,7 +198,7 @@ async function createPool() {
 
     poolVersion++;
     const myVersion = poolVersion;
-    writePool = makePool(8);
+    writePool = makePool(16);
 
     try {
         const conn = await getConnectionWithTimeout(writePool, DB_CONNECT_TIMEOUT);
@@ -205,9 +212,16 @@ async function createPool() {
             conn.release();
         }
         dbConnected = true;
+        isInsertSlow = false;
         console.log(`[DBWorker] Connected (v${myVersion})`);
         parentPort.postMessage({ type: 'dbStatus', connected: true });
-        
+
+        // 연결 복구 시 파일에 저장된 데이터 복구
+        const fileItems = loadFromFile();
+        if (fileItems.length > 0) {
+            dbBuffer.push(...fileItems);
+        }
+
         if (dbBuffer.length - flushIndex > 0) {
             scheduleFlush();
         }
@@ -222,6 +236,7 @@ async function createPool() {
     }
 }
 
+// ─── Insert 로직 (SELECT=conn.query, INSERT=conn.execute) ───
 async function insertChatBatch(thePool, items) {
     if (items.length === 0) return;
 
@@ -233,12 +248,12 @@ async function insertChatBatch(thePool, items) {
         const uncachedUsers = [];
         for (let i = 0; i < items.length; i++) {
             if (!userCache.has(items[i].authorId)) {
-                uncachedUsers.push({ idx: i, authorId: items[i].authorId });
+                uncachedUsers.push(items[i].authorId);
             }
         }
 
         if (uncachedUsers.length > 0) {
-            const uniqueAuthorIds = [...new Set(uncachedUsers.map(u => u.authorId))];
+            const uniqueAuthorIds = [...new Set(uncachedUsers)];
             const placeholders = uniqueAuthorIds.map(() => '(?)').join(',');
             await conn.execute(
                 `INSERT IGNORE INTO youtube_users (authorId) VALUES ${placeholders}`,
@@ -246,7 +261,7 @@ async function insertChatBatch(thePool, items) {
             );
 
             const inPlaceholders = uniqueAuthorIds.map(() => '?').join(',');
-            const [uRows] = await conn.execute(
+            const [uRows] = await conn.query(
                 `SELECT uid, authorId FROM youtube_users WHERE authorId IN (${inPlaceholders})`,
                 uniqueAuthorIds
             );
@@ -278,28 +293,35 @@ async function insertChatBatch(thePool, items) {
                 }
             }
 
-            const orConditions = [];
-            const orParams = [];
-            for (const [, p] of uniqueProfiles) {
-                orConditions.push('(uid = ? AND author = ? AND thumb = ?)');
-                orParams.push(p.userEntry.uid, p.item.author, p.item.thumb);
-            }
-
-            const [existingRows] = await conn.execute(
-                `SELECT nid, uid, author, thumb FROM youtube_user_names WHERE ${orConditions.join(' OR ')}`,
-                orParams
-            );
-
+            // OR 조건 chunking으로 기존 프로필 조회
+            const profileEntries = [...uniqueProfiles.entries()];
             const foundSet = new Set();
-            for (const row of existingRows) {
-                const key = row.uid + '\0' + row.author + '\0' + row.thumb;
-                foundSet.add(key);
-                const matchedProfile = uniqueProfiles.get(key);
-                if (matchedProfile) {
-                    matchedProfile.userEntry.profiles.set(matchedProfile.profileKey, row.nid);
+
+            for (let ci = 0; ci < profileEntries.length; ci += OR_CHUNK_SIZE) {
+                const chunk = profileEntries.slice(ci, ci + OR_CHUNK_SIZE);
+                const orConditions = [];
+                const orParams = [];
+                for (const [, p] of chunk) {
+                    orConditions.push('(uid = ? AND author = ? AND thumb = ?)');
+                    orParams.push(p.userEntry.uid, p.item.author, p.item.thumb);
+                }
+
+                const [existingRows] = await conn.query(
+                    `SELECT nid, uid, author, thumb FROM youtube_user_names WHERE ${orConditions.join(' OR ')}`,
+                    orParams
+                );
+
+                for (const row of existingRows) {
+                    const key = row.uid + '\0' + row.author + '\0' + row.thumb;
+                    foundSet.add(key);
+                    const matchedProfile = uniqueProfiles.get(key);
+                    if (matchedProfile) {
+                        matchedProfile.userEntry.profiles.set(matchedProfile.profileKey, row.nid);
+                    }
                 }
             }
 
+            // 새 프로필 배치 INSERT
             const toInsert = [];
             for (const [key, p] of uniqueProfiles) {
                 if (!foundSet.has(key)) {
@@ -307,14 +329,46 @@ async function insertChatBatch(thePool, items) {
                 }
             }
 
-            for (const p of toInsert) {
-                const [ins] = await conn.execute(
-                    'INSERT INTO youtube_user_names (uid, author, authorAlt, thumb, first_seen) VALUES (?, ?, ?, ?, ?)',
-                    [p.userEntry.uid, p.item.author, p.item.authorAlt, p.item.thumb, p.item.timestamp]
+            if (toInsert.length > 0) {
+                // 멀티로우 INSERT IGNORE
+                const profValues = [];
+                const profParams = [];
+                for (const p of toInsert) {
+                    profValues.push('(?, ?, ?, ?, ?)');
+                    profParams.push(p.userEntry.uid, p.item.author, p.item.authorAlt, p.item.thumb, p.item.timestamp);
+                }
+                await conn.execute(
+                    `INSERT IGNORE INTO youtube_user_names (uid, author, authorAlt, thumb, first_seen) VALUES ${profValues.join(',')}`,
+                    profParams
                 );
-                p.userEntry.profiles.set(p.profileKey, ins.insertId);
+
+                // 방금 INSERT한 프로필들의 nid 일괄 조회
+                const lookupConditions = [];
+                const lookupParams = [];
+                for (const p of toInsert) {
+                    lookupConditions.push('(uid = ? AND author = ? AND thumb = ?)');
+                    lookupParams.push(p.userEntry.uid, p.item.author, p.item.thumb);
+                }
+
+                for (let li = 0; li < lookupConditions.length; li += OR_CHUNK_SIZE) {
+                    const lChunk = lookupConditions.slice(li, li + OR_CHUNK_SIZE);
+                    const lParams = lookupParams.slice(li * 3, (li + OR_CHUNK_SIZE) * 3);
+                    const [nRows] = await conn.query(
+                        `SELECT nid, uid, author, thumb FROM youtube_user_names WHERE ${lChunk.join(' OR ')}`,
+                        lParams
+                    );
+                    for (const row of nRows) {
+                        const matchKey = row.uid + '\0' + row.author + '\0' + row.thumb;
+                        const matchedProfile = uniqueProfiles.get(matchKey);
+                        if (matchedProfile) {
+                            matchedProfile.userEntry.profiles.set(matchedProfile.profileKey, row.nid);
+                        }
+                    }
+                }
             }
         }
+
+        trimUserCache();
 
         // 3단계: 채팅 Batch INSERT
         const chatValues = [];
@@ -346,6 +400,7 @@ async function insertChatBatch(thePool, items) {
     }
 }
 
+// ─── Flush 로직 ───
 let flushErrorCount = 0;
 const FLUSH_MAX_RETRIES = 5;
 
@@ -354,17 +409,36 @@ async function flushDbBuffer() {
     if (isFlushing || pendingCount <= 0 || !dbConnected) return;
     isFlushing = true;
     const flushVersion = poolVersion;
-    const startCount = pendingCount;
 
     while (flushIndex < dbBuffer.length && dbConnected && poolVersion === flushVersion) {
         const end = Math.min(flushIndex + BATCH_SIZE, dbBuffer.length);
         const batch = dbBuffer.slice(flushIndex, end);
         try {
+            const startTime = Date.now();
             await insertChatBatch(writePool, batch);
+            const elapsed = Date.now() - startTime;
+
             flushIndex += batch.length;
             flushErrorCount = 0;
-            
-            // Main thread에 진행 상황 알림
+
+            // insert 속도 감지
+            if (elapsed > SLOW_INSERT_THRESHOLD_MS && !isInsertSlow) {
+                isInsertSlow = true;
+                console.warn(`[DBWorker] Insert slow (${elapsed}ms) → 파일 버퍼 전환`);
+                // 아직 flush 안 된 나머지를 파일로 대피
+                const remaining = dbBuffer.slice(flushIndex);
+                if (remaining.length > 0) {
+                    appendToFile(remaining);
+                    console.log(`[DBWorker] ${remaining.length} items saved to file`);
+                }
+                dbBuffer = [];
+                flushIndex = 0;
+                break;
+            } else if (elapsed <= SLOW_INSERT_THRESHOLD_MS && isInsertSlow) {
+                isInsertSlow = false;
+                console.log('[DBWorker] Insert speed normalized');
+            }
+
             parentPort.postMessage({
                 type: 'flushProgress',
                 processed: flushIndex,
@@ -377,7 +451,15 @@ async function flushDbBuffer() {
                 continue;
             }
             if (isConnectionError(err)) {
-                console.error('[DBWorker] Connection lost during flush');
+                console.error('[DBWorker] Connection lost → 파일 버퍼 전환');
+                // 남은 것 전부 파일로 대피
+                const remaining = dbBuffer.slice(flushIndex);
+                if (remaining.length > 0) {
+                    appendToFile(remaining);
+                    console.log(`[DBWorker] ${remaining.length} items saved to file`);
+                }
+                dbBuffer = [];
+                flushIndex = 0;
                 if (poolVersion === flushVersion) {
                     dbConnected = false;
                     parentPort.postMessage({ type: 'dbStatus', connected: false });
@@ -386,7 +468,8 @@ async function flushDbBuffer() {
             }
             flushErrorCount++;
             if (flushErrorCount >= FLUSH_MAX_RETRIES) {
-                console.error(`[DBWorker] Batch failed ${FLUSH_MAX_RETRIES} times, skipping:`, err.message);
+                console.error(`[DBWorker] Batch failed ${FLUSH_MAX_RETRIES} times → 파일 저장 후 skip`);
+                appendToFile(batch);
                 flushIndex += batch.length;
                 flushErrorCount = 0;
             } else {
@@ -396,13 +479,16 @@ async function flushDbBuffer() {
         }
     }
 
-    compactBuffer();
+    // compact
+    if (flushIndex > 0) {
+        dbBuffer = dbBuffer.slice(flushIndex);
+        flushIndex = 0;
+    }
     isFlushing = false;
-    syncBufferFile();
 
-    const remaining = dbBuffer.length - flushIndex;
+    const remaining = dbBuffer.length;
     if (remaining > 0) {
-        console.log(`[DBWorker] ${remaining} items remaining`);
+        console.log(`[DBWorker] ${remaining} items remaining in memory`);
     }
 }
 
@@ -417,32 +503,22 @@ function scheduleFlush() {
     }, FLUSH_INTERVAL);
 }
 
+// ─── 채팅 데이터 수신 ───
 function bufferPush(chatData) {
-    dbBuffer.push(chatData);
-    const pending = dbBuffer.length - flushIndex;
-    
-    if (pending > DB_BUFFER_LIMIT) {
-        const dropped = pending - DB_BUFFER_LIMIT;
-        const toBeSaved = dbBuffer.slice(flushIndex, flushIndex + dropped);
-        try {
-            const lines = toBeSaved.map(item => {
-                const obj = { ...item };
-                if (Buffer.isBuffer(obj.message)) {
-                    obj.message = obj.message.toString('base64');
-                }
-                return JSON.stringify(obj);
-            });
-            const PERSISTENT_BACKUP = path.join(__dirname, '../db_persistent_backup.ndjson');
-            fs.appendFileSync(PERSISTENT_BACKUP, lines.join('\n') + '\n');
-        } catch (err) {
-            console.error('[DBWorker] Emergency save failed:', err.message);
-        }
-        dbBuffer.splice(flushIndex, dropped);
-        syncBufferFile();
-        console.warn(`[DBWorker] Overflow, saved & dropped ${dropped} items`);
+    // Worker postMessage로 Buffer가 Uint8Array로 변환되므로 복원
+    if (chatData.message && !Buffer.isBuffer(chatData.message)) {
+        chatData.message = Buffer.from(chatData.message);
     }
 
-    // Main thread에 버퍼 상태 전송
+    // DB 연결 안 됨 또는 insert 느림 → 파일에 직접 저장
+    if (!dbConnected || isInsertSlow) {
+        appendToFile([chatData]);
+        return;
+    }
+
+    dbBuffer.push(chatData);
+
+    const pending = dbBuffer.length - flushIndex;
     if (pending % 100 === 0 || pending === 1) {
         parentPort.postMessage({
             type: 'bufferStatus',
@@ -482,27 +558,40 @@ console.log('[DBWorker] Started');
 createPool();
 parentPort.postMessage({ type: 'ready' });
 
-// ─── 헬스체크: DB 연결 끊김 시 자동 재연결 ───
+// ─── 헬스체크: DB 연결 끊김 시 자동 재연결 및 느림 상태 복구 ───
 setInterval(async () => {
     if (dbConnected && writePool) {
         try {
             const conn = await getConnectionWithTimeout(writePool, DB_CONNECT_TIMEOUT);
             await conn.ping();
             conn.release();
+
+            // insert 느림 상태였다면, DB 핑이 정상이므로 복구 시도
+            if (isInsertSlow) {
+                console.log(`[DBWorker] Health check: trying to recover from slow state...`);
+                isInsertSlow = false;
+                const fileItems = loadFromFile();
+                if (fileItems.length > 0) {
+                    dbBuffer.push(...fileItems);
+                }
+                scheduleFlush();
+            } else {
+                // 평상시에도 파일에 남은 데이터가 있다면 복구 시도 (에러로 파일에 쓰였을 수 있음)
+                if (dbBuffer.length === 0 && !isFlushing) {
+                    const fileItems = loadFromFile();
+                    if (fileItems.length > 0) {
+                        dbBuffer.push(...fileItems);
+                        scheduleFlush();
+                    }
+                }
+            }
         } catch (err) {
             console.error(`[DBWorker] Health ping failed: ${err.message}`);
             dbConnected = false;
             parentPort.postMessage({ type: 'dbStatus', connected: false });
         }
     } else if (!dbConnected) {
-        console.log(`[DBWorker] Health check: reconnecting... (${dbBuffer.length - flushIndex} buffered)`);
+        console.log(`[DBWorker] Health check: reconnecting...`);
         await createPool();
-    }
-}, 5000);
-
-// ─── 백그라운드 비상 파일 백업 (비동기) ───
-setInterval(() => {
-    if (!dbConnected && dbBuffer.length - flushIndex > 0) {
-        syncBufferFile();
     }
 }, 5000);
