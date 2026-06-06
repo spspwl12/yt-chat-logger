@@ -1,0 +1,2729 @@
+<!DOCTYPE html>
+<html lang="ko">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1.0, user-scalable=no">
+    <title>Live Chat</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box
+        }
+
+        body {
+            background: #0f0f0f;
+            color: #fff;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            zoom: 150%;
+            overflow-y: auto;
+        }
+
+        @media (max-width: 600px) {
+            body {
+                zoom: 150%;
+            }
+
+            .chat-header h3 {
+                display: none;
+            }
+        }
+
+        #main-logo,
+        #channel-logo {
+            cursor: pointer;
+            flex-shrink: 0;
+            transition: opacity 0.2s, transform 0.15s;
+        }
+
+        #main-logo:hover,
+        #channel-logo:hover {
+            opacity: 0.75;
+            transform: scale(1.12);
+        }
+
+        .chat-container {
+            background: #1a1a1a;
+            width: 100%;
+            border-radius: 12px;
+            display: flex;
+            flex-direction: column;
+            box-shadow: 0 4px 20px rgba(22, 16, 16, 0.5)
+        }
+
+        .chat-header {
+            position: fixed;
+            top: 0;
+            z-index: 10000;
+            width: 100%;
+            padding: 12px 16px;
+            background: #212121;
+            border-bottom: 1px solid #303030;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .chat-header h3 {
+            font-size: 14px;
+            font-weight: 500;
+            white-space: nowrap;
+        }
+
+        .search-container {
+            display: flex;
+            background: #212121;
+            flex: 1;
+            min-width: 0;
+            gap: 8px;
+        }
+
+        .chip-input-area {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            gap: 6px;
+            flex: 1;
+            min-width: 0;
+            padding: 4px 8px;
+            background: #121212;
+            border: 1px solid #303030;
+            border-radius: 20px;
+            cursor: text;
+            transition: border .2s;
+        }
+
+        .chip-input-area:focus-within {
+            border-color: #3ea6ff;
+        }
+
+        .chip {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            padding: 2px 10px;
+            border-radius: 12px;
+            font-size: 12px;
+            white-space: nowrap;
+            animation: chipIn 0.2s ease;
+            max-width: 100%;
+            min-width: 0;
+        }
+
+        .chip-label {
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            min-width: 0;
+        }
+
+        @keyframes chipIn {
+            from {
+                transform: scale(0.8);
+                opacity: 0;
+            }
+
+            to {
+                transform: scale(1);
+                opacity: 1;
+            }
+        }
+
+        .chip.text {
+            background: #2d1b3d;
+            color: #d49aff;
+        }
+
+        .chip.channel {
+            background: #1a3a5c;
+            color: #7cb8ff;
+        }
+
+        .logic-badge {
+            font-size: 9px;
+            padding: 1px 4px;
+            border-radius: 4px;
+            margin-right: 4px;
+            font-weight: 800;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+        }
+
+        .logic-AND {
+            background: rgba(124, 184, 255, 0.2);
+            color: #7cb8ff;
+            border: 1px solid rgba(124, 184, 255, 0.4);
+        }
+
+        .logic-OR {
+            background: rgba(209, 154, 239, 0.2);
+            color: #d19aef;
+            border: 1px solid rgba(209, 154, 239, 0.4);
+        }
+
+        .logic-NOT {
+            background: rgba(255, 140, 140, 0.2);
+            color: #ff8c8c;
+            border: 1px solid rgba(255, 140, 140, 0.4);
+        }
+
+        .chip-type-select {
+            padding: 4px 6px;
+            background: #1e1e1e;
+            border: 1px solid #404040;
+            border-radius: 10px;
+            color: #aaa;
+            font-size: 11px;
+            outline: none;
+            cursor: pointer;
+            flex-shrink: 0;
+            font-family: sans-serif;
+        }
+
+        .chip.author {
+            background: #1a3c1a;
+            color: #7cff7c;
+        }
+
+        .chip.userId {
+            background: #3c2a1a;
+            color: #ffb87c;
+        }
+
+        .chip.superchat {
+            background: #3c3a1a;
+            color: #ffe07c;
+        }
+
+        .chip-remove {
+            cursor: pointer;
+            font-size: 14px;
+            line-height: 1;
+            opacity: 0.6;
+            transition: opacity 0.2s;
+            flex-shrink: 0;
+        }
+
+        .chip-remove:hover {
+            opacity: 1;
+        }
+
+        .chip-type-select {
+            padding: 4px 6px;
+            background: #1e1e1e;
+            border: 1px solid #404040;
+            border-radius: 10px;
+            color: #aaa;
+            font-size: 11px;
+            outline: none;
+            cursor: pointer;
+            flex-shrink: 0;
+        }
+
+        .chip-type-select:focus {
+            border-color: #3ea6ff;
+        }
+
+        .chip-input {
+            flex: 1;
+            min-width: 130px;
+            padding: 4px 0;
+            background: transparent;
+            border: none;
+            color: #fff;
+            font-size: 13px;
+            outline: none;
+            resize: none;
+            overflow: hidden;
+            font-family: inherit;
+        }
+
+        .chip-input::placeholder {
+            color: #717171;
+        }
+
+        .search-input {
+            width: 80%;
+            flex: 1;
+            padding: 8px 12px;
+            background: #121212;
+            border: 1px solid #303030;
+            border-radius: 20px;
+            color: #fff;
+            font-size: 13px;
+            outline: none;
+            transition: border .2s
+        }
+
+        .search-input:focus {
+            border-color: #3ea6ff
+        }
+
+        .search-input::placeholder {
+            color: #717171
+        }
+
+        .chat-messages {
+            flex: 1;
+            padding: 75px 12px 12px;
+            display: flex;
+            flex-direction: column;
+            gap: 8px
+        }
+
+        .chat-messages::-webkit-scrollbar {
+            width: 8px
+        }
+
+        .chat-messages::-webkit-scrollbar-track {
+            background: #1a1a1a
+        }
+
+        .chat-messages::-webkit-scrollbar-thumb {
+            background: #404040;
+            border-radius: 4px
+        }
+
+        .chat-messages::-webkit-scrollbar-thumb:hover {
+            background: #555
+        }
+
+        .message {
+            display: flex;
+            gap: 12px;
+            padding: 4px 8px;
+            border-radius: 4px;
+            transition: background .2s;
+        }
+
+        .message:hover {
+            background: #272727
+        }
+
+        .avatar {
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            flex-shrink: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 11px;
+            font-weight: 500
+        }
+
+        .message-content {
+            flex: 1;
+            min-width: 0
+        }
+
+        .message-header {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 2px;
+        }
+
+        .username {
+            font-size: 12px;
+            color: #3ea6ff;
+            font-weight: 500;
+            cursor: pointer;
+            text-decoration: none;
+            word-break: break-all;
+            -webkit-user-select: none;
+            -moz-user-select: none;
+            -ms-user-select: none;
+            user-select: none;
+            -webkit-touch-callout: none;
+        }
+
+        .username:hover {
+            text-decoration: underline;
+        }
+
+        .badge {
+            font-size: 10px;
+            padding: 1px 4px;
+            border-radius: 2px;
+            font-weight: 500
+        }
+
+        .badge.member {
+            background: #2ba640
+        }
+
+        .badge.moderator {
+            background: #5e84f1
+        }
+
+        .timestamp {
+            font-size: 11px;
+            color: #717171;
+            margin-left: auto
+        }
+
+        .message-text {
+            font-size: 13px;
+            color: #f1f1f1;
+            word-wrap: break-word;
+            line-height: 1.4;
+            cursor: pointer;
+            text-decoration: none;
+        }
+
+        .message-text:hover {
+            text-decoration: underline;
+        }
+
+        .highlight {
+            background-color: yellow !important;
+            transition: background-color 0.5s ease;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 16px;
+            color: #717171;
+            font-size: 13px
+        }
+
+        .spinner {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 2px solid #303030;
+            border-top-color: #3ea6ff;
+            border-radius: 50%;
+            animation: spin .8s linear infinite
+        }
+
+        .super-chat {
+            width: 100px;
+            border-radius: 20px;
+            box-shadow: 0 8px 16px rgba(0, 0, 0, 0.2);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            color: white;
+        }
+
+        @keyframes spin {
+            to {
+                transform: rotate(360deg)
+            }
+        }
+
+        .no-more {
+            text-align: center;
+            padding: 12px;
+            color: #717171;
+            font-size: 12px;
+            background: #252525;
+            border-radius: 8px;
+            margin: 8px 0
+        }
+
+        .status-bar {
+            padding: 8px 12px;
+            background: #252525;
+            text-align: center;
+            font-size: 11px;
+            color: #717171;
+            border-top: 1px solid #303030
+        }
+
+        .empty {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            color: #717171;
+            gap: 8px
+        }
+
+        /* Context Menu */
+        .context-menu {
+            position: fixed;
+            background: #252525;
+            border: 1px solid #3d3d3d;
+            border-radius: 4px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+            padding: 4px 0;
+            z-index: 20000;
+            display: none;
+            min-width: 150px;
+            max-height: 250px;
+            overflow-y: auto;
+        }
+
+        .context-menu::-webkit-scrollbar {
+            width: 6px;
+        }
+
+        .context-menu::-webkit-scrollbar-track {
+            background: transparent;
+        }
+
+        .context-menu::-webkit-scrollbar-thumb {
+            background: #4a4a4a;
+            border-radius: 3px;
+        }
+
+        .context-menu::-webkit-scrollbar-thumb:hover {
+            background: #606060;
+        }
+
+        .context-menu-item {
+            padding: 8px 16px;
+            font-size: 13px;
+            color: #f1f1f1;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+
+        .context-menu-item:hover {
+            background: #3d3d3d;
+        }
+
+        .context-menu-header {
+            padding: 8px 16px 4px 16px;
+            font-size: 11px;
+            font-weight: 700;
+            color: #888;
+            cursor: default;
+        }
+
+        /* History Modal */
+        .history-modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.7);
+            z-index: 30000;
+            display: none;
+            justify-content: center;
+            align-items: center;
+        }
+
+        #historyModalOverlay {
+            z-index: 31000;
+        }
+
+        .history-modal {
+            background: #212121;
+            border: 1px solid #3d3d3d;
+            border-radius: 8px;
+            width: 85%;
+            max-width: 320px;
+            max-height: 75%;
+            display: flex;
+            flex-direction: column;
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.6);
+        }
+
+        .history-modal-header {
+            padding: 16px;
+            border-bottom: 1px solid #3d3d3d;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 16px;
+            font-weight: 500;
+        }
+
+        .history-modal-close {
+            cursor: pointer;
+            font-size: 20px;
+            color: #aaa;
+            transition: color 0.2s;
+            line-height: 1;
+        }
+
+        .history-modal-close:hover {
+            color: #fff;
+        }
+
+        .history-modal-content {
+            padding: 16px;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .history-item {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 8px;
+            background: #1a1a1a;
+            border-radius: 6px;
+            border: 1px solid #303030;
+        }
+
+        .history-item-thumb {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            flex-shrink: 0;
+            background: #303030;
+        }
+
+        .history-item-info {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+
+        .history-item-name {
+            font-size: 14px;
+            font-weight: 500;
+            color: #fff;
+        }
+
+        .history-item-date {
+            font-size: 12px;
+            color: #aaa;
+        }
+
+        /* ─── Channel Manager Modal ─── */
+        .channel-modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.75);
+            z-index: 35000;
+            display: none;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .channel-modal {
+            background: #1e1e1e;
+            border: 1px solid #3d3d3d;
+            border-radius: 12px;
+            width: 90%;
+            max-width: 380px;
+            max-height: 50vh;
+            display: flex;
+            flex-direction: column;
+            box-shadow: 0 12px 40px rgba(0, 0, 0, 0.7);
+            overflow: hidden;
+        }
+
+        .channel-modal-header {
+            padding: 16px 16px 12px;
+            border-bottom: 1px solid #2d2d2d;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-shrink: 0;
+        }
+
+        .channel-modal-title {
+            font-size: 15px;
+            font-weight: 600;
+            color: #f1f1f1;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .channel-modal-close {
+            cursor: pointer;
+            font-size: 22px;
+            color: #717171;
+            transition: color 0.2s;
+            line-height: 1;
+            padding: 2px;
+        }
+
+        .channel-modal-close:hover {
+            color: #fff;
+        }
+
+        .channel-add-row {
+            padding: 12px 16px;
+            border-bottom: 1px solid #2d2d2d;
+            display: flex;
+            gap: 8px;
+            flex-shrink: 0;
+        }
+
+        .channel-add-input {
+            flex: 1;
+            padding: 8px 12px;
+            background: #121212;
+            border: 1px solid #404040;
+            border-radius: 8px;
+            color: #fff;
+            font-size: 13px;
+            outline: none;
+            transition: border 0.2s;
+            min-width: 0;
+        }
+
+        .channel-add-input:focus {
+            border-color: #3ea6ff;
+        }
+
+        .channel-add-input::placeholder {
+            color: #555;
+        }
+
+        .channel-add-btn {
+            padding: 8px 14px;
+            background: #3ea6ff;
+            border: none;
+            border-radius: 8px;
+            color: #0f0f0f;
+            font-size: 13px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background 0.2s, transform 0.1s;
+            flex-shrink: 0;
+            white-space: nowrap;
+        }
+
+        .channel-add-btn:hover {
+            background: #5bb8ff;
+        }
+
+        .channel-add-btn:active {
+            transform: scale(0.96);
+        }
+
+        .channel-add-btn:disabled {
+            background: #303030;
+            color: #555;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .channel-list {
+            overflow-y: auto;
+            flex: 1;
+            padding: 8px 0;
+            max-height: 350px;
+        }
+
+        .channel-list::-webkit-scrollbar {
+            width: 6px;
+        }
+
+        .channel-list::-webkit-scrollbar-track {
+            background: transparent;
+        }
+
+        .channel-list::-webkit-scrollbar-thumb {
+            background: #404040;
+            border-radius: 3px;
+        }
+
+        .channel-item {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 9px 16px;
+            transition: background 0.15s;
+        }
+
+        .channel-item:hover {
+            background: #272727;
+        }
+
+        .channel-item-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: #3ea6ff;
+            flex-shrink: 0;
+        }
+
+        .channel-item-id {
+            flex: 1;
+            font-size: 13px;
+            color: #e0e0e0;
+            font-family: monospace;
+            word-break: break-all;
+            min-width: 0;
+            cursor: pointer;
+        }
+
+        .channel-item-id:hover {
+            color: #3ea6ff;
+            text-decoration: underline;
+        }
+
+        .channel-item-actions {
+            display: flex;
+            gap: 6px;
+            flex-shrink: 0;
+        }
+
+        .channel-filter-btn {
+            padding: 4px 8px;
+            background: #1a3a5c;
+            border: 1px solid #2a5a8c;
+            border-radius: 5px;
+            color: #7cb8ff;
+            font-size: 11px;
+            cursor: pointer;
+            transition: background 0.15s;
+            white-space: nowrap;
+        }
+
+        .channel-filter-btn:hover {
+            background: #1e4a7a;
+        }
+
+        .channel-delete-btn {
+            padding: 4px 8px;
+            background: transparent;
+            border: 1px solid #4a2020;
+            border-radius: 5px;
+            color: #ff6b6b;
+            font-size: 11px;
+            cursor: pointer;
+            transition: background 0.15s, border-color 0.15s;
+            white-space: nowrap;
+        }
+
+        .channel-delete-btn:hover {
+            background: #3a1515;
+            border-color: #ff4444;
+        }
+
+        .channel-empty {
+            padding: 32px 16px;
+            text-align: center;
+            color: #555;
+            font-size: 13px;
+        }
+
+        .channel-empty svg {
+            display: block;
+            margin: 0 auto 10px;
+            opacity: 0.3;
+        }
+
+        .channel-modal-status {
+            padding: 8px 16px;
+            font-size: 11px;
+            min-height: 26px;
+            transition: color 0.2s;
+            flex-shrink: 0;
+            text-align: center;
+        }
+
+        .channel-modal-status.ok {
+            color: #4caf50;
+        }
+
+        .channel-modal-status.err {
+            color: #ff6b6b;
+        }
+
+        .channel-modal-status.info {
+            color: #717171;
+        }
+
+        @keyframes channelFadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(-6px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .channel-item {
+            animation: channelFadeIn 0.2s ease;
+        }
+
+        /* DeepScan Modal Styles */
+        .deepscan-modal {
+            background: #0a0a0a;
+            border: 1px solid #27272a;
+            border-radius: 12px;
+            width: 95%;
+            max-width: 500px;
+            max-height: 85%;
+            display: flex;
+            flex-direction: column;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.8);
+        }
+
+        .deepscan-modal-content {
+            padding: 16px;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+        }
+
+        /* Reused Analyze Styles */
+        .weight-sliders {
+            display: flex;
+            gap: 12px;
+            padding: 12px;
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid #27272a;
+            border-radius: 8px;
+        }
+
+        .weight-slider-item {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+
+        .weight-slider-item label {
+            font-size: 11px;
+            color: #a1a1aa;
+            display: flex;
+            justify-content: space-between;
+        }
+
+        .weight-slider-item label .wval {
+            color: #f4f4f5;
+            font-weight: 600;
+        }
+
+        .weight-slider-item input[type="range"] {
+            -webkit-appearance: none;
+            width: 100%;
+            height: 4px;
+            background: #27272a;
+            border-radius: 2px;
+            outline: none;
+        }
+
+        .weight-slider-item input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background: #3b82f6;
+            cursor: pointer;
+        }
+
+        .weight-slider-item.interest input[type="range"]::-webkit-slider-thumb {
+            background: #10b981;
+        }
+
+        .weight-slider-item.rare input[type="range"]::-webkit-slider-thumb {
+            background: #f97316;
+        }
+
+        .deepscan-btn {
+            background: #3b82f6;
+            color: white;
+            border: none;
+            padding: 10px;
+            border-radius: 6px;
+            font-size: 13px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background 0.2s;
+            text-align: center;
+        }
+
+        .deepscan-btn:hover {
+            background: #2563eb;
+        }
+
+        .result-card {
+            background: #0a0a0a;
+            border: 1px solid #27272a;
+            border-radius: 10px;
+            padding: 16px;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .card-top {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            gap: 12px;
+        }
+
+        .user-info h3 {
+            font-size: 15px;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            flex-wrap: wrap;
+            margin: 0;
+            color: #f4f4f5;
+        }
+
+        .user-id {
+            font-size: 11px;
+            color: #a1a1aa;
+            font-family: monospace;
+            margin-top: 4px;
+            word-break: break-all;
+        }
+
+        .match-score {
+            display: flex;
+            flex-direction: column;
+            align-items: flex-end;
+            flex-shrink: 0;
+            gap: 2px;
+        }
+
+        .score-value {
+            font-size: 20px;
+            font-weight: 700;
+            color: #f4f4f5;
+        }
+
+        .score-label {
+            font-size: 10px;
+            color: #a1a1aa;
+            text-transform: uppercase;
+        }
+
+        .score-bars {
+            display: flex;
+            gap: 12px;
+            align-items: center;
+        }
+
+        .score-bar-item {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+
+        .score-bar-header {
+            display: flex;
+            justify-content: space-between;
+            font-size: 10px;
+            color: #a1a1aa;
+        }
+
+        .score-bar-header .val {
+            font-weight: 600;
+            color: #f4f4f5;
+        }
+
+        .score-bar-track {
+            height: 4px;
+            background: rgba(255, 255, 255, 0.06);
+            border-radius: 2px;
+            overflow: hidden;
+        }
+
+        .score-bar-fill {
+            height: 100%;
+            border-radius: 2px;
+        }
+
+        .score-bar-fill.style {
+            background: linear-gradient(90deg, #3b82f6, #8b5cf6);
+        }
+
+        .score-bar-fill.interest {
+            background: linear-gradient(90deg, #10b981, #34d399);
+        }
+
+        .score-bar-fill.rare {
+            background: linear-gradient(90deg, #f97316, #fb923c);
+        }
+
+        .keywords {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+            padding-top: 12px;
+            border-top: 1px dashed #27272a;
+        }
+
+        .keyword-tag {
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid #27272a;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 11px;
+            color: #d4d4d8;
+        }
+
+        .keyword-tag.interest-tag {
+            background: rgba(16, 185, 129, 0.08);
+            border-color: rgba(16, 185, 129, 0.25);
+            color: #6ee7b7;
+        }
+
+        .keyword-tag.opinion-tag {
+            background: rgba(139, 92, 246, 0.08);
+            border-color: rgba(139, 92, 246, 0.25);
+            color: #c4b5fd;
+        }
+
+        .keyword-tag.channel-tag {
+            background: rgba(59, 130, 246, 0.08);
+            border-color: rgba(59, 130, 246, 0.25);
+            color: #93c5fd;
+        }
+
+        .keyword-tag.rare-tag {
+            background: rgba(249, 115, 22, 0.1);
+            border-color: rgba(249, 115, 22, 0.3);
+            color: #fdba74;
+        }
+
+        .df-badge {
+            font-size: 9px;
+            background: rgba(255, 255, 255, 0.08);
+            padding: 1px 4px;
+            border-radius: 2px;
+            margin-left: 4px;
+            color: #a1a1aa;
+        }
+
+        .section-label {
+            font-size: 10px;
+            font-weight: 600;
+            color: #a1a1aa;
+            width: 100%;
+            margin-top: 4px;
+        }
+
+        .chip.group-1 {
+            border: 2px solid #ef4444;
+        }
+
+        .chip.group-2 {
+            border: 2px solid #3b82f6;
+        }
+
+        .chip.group-3 {
+            border: 2px solid #22c55e;
+        }
+
+        .chip.group-4 {
+            border: 2px solid #eab308;
+        }
+
+        .chip.group-5 {
+            border: 2px solid #a855f7;
+        }
+
+        .chip.group-6 {
+            border: 2px solid #f97316;
+        }
+
+        .rank-badge {
+            font-size: 10px;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-weight: 600;
+        }
+
+        .rank-1 {
+            background: rgba(239, 68, 68, 0.15);
+            color: #ef4444;
+            border: 1px solid rgba(239, 68, 68, 0.3);
+        }
+
+        .rank-2 {
+            background: rgba(249, 115, 22, 0.15);
+            color: #f97316;
+            border: 1px solid rgba(249, 115, 22, 0.3);
+        }
+
+        .rank-3 {
+            background: rgba(234, 179, 8, 0.15);
+            color: #eab308;
+            border: 1px solid rgba(234, 179, 8, 0.3);
+        }
+
+        .rank-other {
+            background: #27272a;
+            color: #a1a1aa;
+            border: 1px solid transparent;
+        }
+    </style>
+    <script src="https://cdn.jsdelivr.net/npm/pako@2/dist/pako.min.js"></script>
+
+</head>
+
+<body>
+    <div class="chat-container" id="chatContainer">
+        <div class="chat-header">
+            <svg id="main-logo" width="24" height="24" viewBox="0 0 24 24" fill="#fff" title="새로고침">
+                <path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm0 14H6l-2 2V4h16v12z" />
+            </svg>
+            <svg id="channel-logo" width="24" height="24" viewBox="0 0 24 24" fill="#3ea6ff" title="채널 관리">
+                <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 14.5v-9l6 4.5-6 4.5z" />
+            </svg>
+            <h3>채팅 로그</h3>
+            <div class="search-container">
+                <div class="chip-input-area" id="chipInputArea">
+                    <select id="chipTypeSelect" class="chip-type-select">
+                        <option value="" disabled selected hidden>➕ 조건 추가</option>
+                        <optgroup label="조건">
+                            <option value="AND|text">그리고</option>
+                            <option value="OR|text">또는</option>
+                            <option value="NOT|text">제외</option>
+                        </optgroup>
+                        <optgroup label="일반">
+                            <option value="AND|channel">채널</option>
+                            <option value="AND|userId">유저ID</option>
+                            <option value="AND|author">작성자</option>
+                            <option value="AND|superchat">슈퍼챗</option>
+                        </optgroup>
+                    </select>
+                    <textarea class="chip-input" id="chipInput" rows="1" placeholder="검색어 입력 후 Enter"></textarea>
+                </div>
+            </div>
+        </div>
+        <div class="chat-messages" id="chatMessages"></div>
+    </div>
+
+    <div id="contextMenu" class="context-menu">
+        <div class="context-menu-header">일반</div>
+        <div class="context-menu-item" id="contextMenuHistory">닉네임 변경 이력</div>
+        <div class="context-menu-item" id="contextMenuDeepScan">동일인물 찾기</div>
+        <div class="context-menu-header">조건</div>
+        <div class="context-menu-item" id="contextMenuAddAnd">그리고</div>
+        <div class="context-menu-item" id="contextMenuAddOr">또는</div>
+        <div class="context-menu-item" id="contextMenuAddNot">제외</div>
+    </div>
+
+    <div id="chipContextMenu" class="context-menu">
+        <div class="context-menu-header">조건</div>
+        <div class="context-menu-item" id="chipMenuLogicAnd">그리고</div>
+        <div class="context-menu-item" id="chipMenuLogicOr">또는</div>
+        <div class="context-menu-item" id="chipMenuLogicNot">제외</div>
+        <div class="context-menu-header">그룹</div>
+        <div class="context-menu-item" id="chipMenuG1">🔴 그룹 1 지정</div>
+        <div class="context-menu-item" id="chipMenuG2">🔵 그룹 2 지정</div>
+        <div class="context-menu-item" id="chipMenuG3">🟢 그룹 3 지정</div>
+        <div class="context-menu-item" id="chipMenuG4">🟡 그룹 4 지정</div>
+        <div class="context-menu-item" id="chipMenuG5">🟣 그룹 5 지정</div>
+        <div class="context-menu-item" id="chipMenuG6">🟠 그룹 6 지정</div>
+        <div class="context-menu-item" id="chipMenuClear">⚪ 그룹 해제</div>
+    </div>
+
+    <!-- ─── Channel Manager Modal ─── -->
+    <div id="channelModalOverlay" class="channel-modal-overlay">
+        <div class="channel-modal">
+            <div class="channel-modal-header">
+                <span class="channel-modal-title">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="#3ea6ff">
+                        <path
+                            d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 14.5v-9l6 4.5-6 4.5z" />
+                    </svg>
+                    채널 관리
+                </span>
+                <span class="channel-modal-close" id="channelModalClose">&times;</span>
+            </div>
+            <div class="channel-add-row">
+                <input type="text" class="channel-add-input" id="channelAddInput" placeholder="채널 ID 또는 YouTube URL"
+                    autocomplete="off" spellcheck="false">
+                <button class="channel-add-btn" id="channelAddBtn">추가</button>
+            </div>
+            <div class="channel-list" id="channelList"></div>
+            <div class="channel-modal-status info" id="channelModalStatus"></div>
+        </div>
+    </div>
+
+    <div id="historyModalOverlay" class="history-modal-overlay">
+        <div class="history-modal">
+            <div class="history-modal-header">
+                <span id="historyModalTitle">닉네임 변경 이력</span>
+                <span class="history-modal-close" id="historyModalClose">&times;</span>
+            </div>
+            <div class="history-modal-content" id="historyModalContent">
+            </div>
+        </div>
+    </div>
+
+    <div id="deepScanModalOverlay" class="history-modal-overlay">
+        <div class="deepscan-modal">
+            <div class="history-modal-header">
+                <span id="deepScanModalTitle">동일인물 찾기 (Deep Scan)</span>
+                <span class="history-modal-close" id="deepScanModalClose">&times;</span>
+            </div>
+            <div class="deepscan-modal-content">
+                <div class="weight-sliders">
+                    <div class="weight-slider-item">
+                        <label>✍️ 문체 <span class="wval" id="dsWsLabel">0%</span></label>
+                        <input type="range" id="dsWsSlider" min="0" max="100" value="0">
+                    </div>
+                    <div class="weight-slider-item interest">
+                        <label>🎯 관심사 <span class="wval" id="dsWiLabel">0%</span></label>
+                        <input type="range" id="dsWiSlider" min="0" max="100" value="0">
+                    </div>
+                    <div class="weight-slider-item rare">
+                        <label>🔥 희귀 <span class="wval" id="dsWrLabel">100%</span></label>
+                        <input type="range" id="dsWrSlider" min="0" max="100" value="100">
+                    </div>
+                </div>
+                <button class="deepscan-btn" id="deepScanBtn">Scan Now</button>
+                <div id="deepScanResults" style="display: flex; flex-direction: column; gap: 12px;"></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const mainLogo = document.getElementById('main-logo');
+        const channelLogo = document.getElementById('channel-logo');
+        const chatMessages = document.getElementById('chatMessages');
+        const chatContainer = document.getElementById('chatContainer');
+        const chipInputArea = document.getElementById('chipInputArea');
+        const chipInput = document.getElementById('chipInput');
+        const chipTypeSelect = document.getElementById('chipTypeSelect');
+        const contextMenu = document.getElementById('contextMenu');
+        const contextMenuHistory = document.getElementById('contextMenuHistory');
+        const contextMenuDeepScan = document.getElementById('contextMenuDeepScan');
+        const historyModalOverlay = document.getElementById('historyModalOverlay');
+        const historyModalClose = document.getElementById('historyModalClose');
+        const historyModalContent = document.getElementById('historyModalContent');
+        const deepScanModalOverlay = document.getElementById('deepScanModalOverlay');
+        const deepScanModalClose = document.getElementById('deepScanModalClose');
+        const dsWsSlider = document.getElementById('dsWsSlider');
+        const dsWiSlider = document.getElementById('dsWiSlider');
+        const dsWrSlider = document.getElementById('dsWrSlider');
+        const dsWsLabel = document.getElementById('dsWsLabel');
+        const dsWiLabel = document.getElementById('dsWiLabel');
+        const dsWrLabel = document.getElementById('dsWrLabel');
+        const deepScanBtn = document.getElementById('deepScanBtn');
+        const deepScanResults = document.getElementById('deepScanResults');
+        let currentContextAuthorId = null;
+
+        const CHIP_LABELS = {
+            text: '검색', channel: '채널', userId: '유저',
+            author: '작성자', superchat: '슈퍼챗'
+        };
+        const CHIP_PLACEHOLDERS = {
+            text: '검색어 입력 후 Enter',
+            channel: '채널 ID 입력 후 Enter',
+            userId: '유저 ID 입력 후 Enter',
+            author: '작성자 이름 입력 후 Enter',
+            superchat: ''
+        };
+        let loading = false;
+        let loadVersion = 0;
+        let hasMoreD = true;
+        let hasMoreU = true;
+        let timer = null;
+        let firstID = 0;
+        let lastID = 999999999999999;
+        let chips = [];
+
+        function makeChip(type, logic, value) {
+            logic = logic || 'AND';
+            if (type === 'superchat')
+                return { type, logic, value: '', label: '슈퍼챗' };
+            if (!value) return null;
+            const labelText = CHIP_LABELS[type] || type;
+            const label = labelText + ': ' + value;
+            return { type, logic, value, label };
+        }
+
+        function chipsToText(chipArray) {
+            if (!chipArray || chipArray.length === 0) return '';
+            let currentGroups = [];
+            let parts = [];
+
+            chipArray.forEach((c, i) => {
+                let cGroups = c.group ? (Array.isArray(c.group) ? c.group : [c.group]) : [];
+
+                let common = 0;
+                while (common < currentGroups.length && common < cGroups.length && currentGroups[common] === cGroups[common]) common++;
+
+                for (let j = currentGroups.length - 1; j >= common; j--) {
+                    parts.push(')');
+                }
+
+                let prefix = '';
+                if (c.logic === 'OR') prefix = 'OR ';
+                else if (c.logic === 'NOT') prefix = '-';
+
+                if (i === 0 && c.logic !== 'NOT') {
+                    prefix = '';
+                }
+
+                for (let j = common; j < cGroups.length; j++) {
+                    parts.push(prefix + '(');
+                    prefix = '';
+                }
+
+                if (c.type === 'superchat') {
+                    parts.push(prefix + 'is:슈퍼챗');
+                } else {
+                    let label = CHIP_LABELS[c.type] || c.type;
+                    let val = c.value || '';
+                    if (val.includes(' ') || val.includes('"')) {
+                        val = `"${val.replace(/"/g, '""')}"`;
+                    }
+                    parts.push(`${prefix}${label}:${val}`);
+                }
+
+                currentGroups = cGroups;
+            });
+
+            for (let j = 0; j < currentGroups.length; j++) {
+                parts.push(')');
+            }
+
+            return parts.join(' ');
+        }
+
+        function parseFilterString(str) {
+            const tokens = [];
+            let current = '';
+            let inQuote = false;
+            for (let i = 0; i < str.length; i++) {
+                const c = str[i];
+                if (c === '"') {
+                    inQuote = !inQuote;
+                    current += c;
+                } else if (c === ' ' && !inQuote) {
+                    if (current.trim()) tokens.push(current.trim());
+                    current = '';
+                } else {
+                    current += c;
+                }
+            }
+            if (current.trim()) tokens.push(current.trim());
+
+            let newChips = [];
+            let pendingLogic = 'AND';
+            let explicitLogic = false;
+            let groupStack = [];
+            let groupCounter = 1;
+
+            for (let i = 0; i < tokens.length; i++) {
+                let t = tokens[i];
+                if (t.toUpperCase() === 'AND') { pendingLogic = 'AND'; explicitLogic = true; continue; }
+                if (t.toUpperCase() === 'OR') { pendingLogic = 'OR'; explicitLogic = true; continue; }
+                if (t.toUpperCase() === 'NOT') { pendingLogic = 'NOT'; explicitLogic = true; continue; }
+
+                let logic = pendingLogic;
+                if (t.toLowerCase().startsWith('or:')) { logic = 'OR'; t = t.substring(3); explicitLogic = true; }
+                else if (t.toLowerCase().startsWith('not:')) { logic = 'NOT'; t = t.substring(4); explicitLogic = true; }
+                else if (t.startsWith('-')) { logic = 'NOT'; t = t.substring(1); explicitLogic = true; }
+
+                pendingLogic = 'AND';
+
+                if (t === '(') {
+                    groupStack.push(groupCounter++);
+                    pendingLogic = logic;
+                    explicitLogic = true;
+                    continue;
+                }
+                if (t === ')') {
+                    groupStack.pop();
+                    pendingLogic = 'AND';
+                    explicitLogic = false;
+                    continue;
+                }
+
+                let type = 'text';
+                let val = t;
+
+                const colonIdx = t.indexOf(':');
+                if (colonIdx > 0 && !t.startsWith('"')) {
+                    const prefix = t.toLowerCase().substring(0, colonIdx);
+                    const rest = t.substring(colonIdx + 1);
+                    if (['ch', 'channel', '채널'].includes(prefix)) { type = 'channel'; val = rest; }
+                    else if (['@', 'user', '유저', '유저id'].includes(prefix)) { type = 'userId'; val = rest; }
+                    else if (['author', '작성자'].includes(prefix)) { type = 'author'; val = rest; }
+                    else if (['text', '검색'].includes(prefix)) { type = 'text'; val = rest; }
+                    else if (['is', 'has', '타입'].includes(prefix) && ['sc', 'superchat', '슈퍼챗'].includes(rest.toLowerCase())) { type = 'superchat'; val = ''; }
+                } else if (t.startsWith('@')) {
+                    type = 'userId';
+                    val = t.substring(1);
+                }
+
+                let wasQuoted = false;
+                if (val.startsWith('"') && val.endsWith('"') && val.length >= 2) {
+                    val = val.substring(1, val.length - 1).replace(/""/g, '"');
+                    wasQuoted = true;
+                }
+
+                const chip = makeChip(type, logic, val);
+                if (chip) {
+                    chip.wasQuoted = wasQuoted;
+                    chip.explicitLogic = explicitLogic;
+                    if (groupStack.length > 0) {
+                        chip.group = [...groupStack];
+                    }
+                    newChips.push(chip);
+                }
+
+                explicitLogic = false;
+            }
+
+            const compressed = [];
+            for (let i = 0; i < newChips.length; i++) {
+                const c = newChips[i];
+                if (compressed.length > 0) {
+                    const prev = compressed[compressed.length - 1];
+                    const prevGrpStr = JSON.stringify(prev.group || []);
+                    const cGrpStr = JSON.stringify(c.group || []);
+                    if (prev.type === 'text' && c.type === 'text' && c.logic === 'AND' && !c.explicitLogic && !prev.wasQuoted && !c.wasQuoted && prevGrpStr === cGrpStr) {
+                        prev.value += ' ' + c.value;
+                        prev.label = (CHIP_LABELS['text'] || '검색') + ': ' + prev.value;
+                        continue;
+                    }
+                }
+                compressed.push(c);
+            }
+            newChips = compressed;
+
+            if (chips && chips.length > 0) {
+                let groupMapping = {};
+                let usedOldGroups = new Set();
+                newChips.forEach(nc => {
+                    let ncGroups = nc.group ? (Array.isArray(nc.group) ? nc.group : [nc.group]) : [];
+                    ncGroups.forEach(g => {
+                        if (!groupMapping[g]) {
+                            const match = chips.find(oc => {
+                                if (oc.type !== nc.type || oc.value !== nc.value || oc.logic !== nc.logic || !oc.group) return false;
+                                let ocGroups = Array.isArray(oc.group) ? oc.group : [oc.group];
+                                let oldG = ocGroups[ocGroups.length - 1];
+                                return !usedOldGroups.has(oldG);
+                            });
+                            if (match) {
+                                let ocGroups = Array.isArray(match.group) ? match.group : [match.group];
+                                let oldG = ocGroups[ocGroups.length - 1];
+                                groupMapping[g] = oldG;
+                                usedOldGroups.add(oldG);
+                            }
+                        }
+                    });
+                });
+                newChips.forEach(nc => {
+                    if (nc.group) {
+                        let ncGroups = Array.isArray(nc.group) ? nc.group : [nc.group];
+                        nc.group = ncGroups.map(g => groupMapping[g] || g);
+                    }
+                });
+            }
+
+            return newChips;
+        }
+
+        function addChipBySelect(value, skipLoad) {
+            const valSplit = chipTypeSelect.value.split('|');
+            const logic = valSplit[0];
+            const type = valSplit[1];
+            const chip = makeChip(type, logic, value);
+            if (!chip) return;
+            chips.push(chip);
+            renderChips();
+            saveChips();
+            if (!skipLoad) load(true, 0, "down");
+        }
+
+        // addChip is now mostly unused since we parse everything on blur, but kept for compatibility just in case
+        function addChip(text, skipLoad) {
+            const newChips = parseFilterString(text);
+            newChips.forEach(nc => {
+                if (nc.type !== 'group_start' && nc.type !== 'group_end') {
+                    if (!chips.some(c => c.type === nc.type && c.value === nc.value && c.logic === nc.logic)) {
+                        chips.push(nc);
+                    }
+                } else {
+                    chips.push(nc);
+                }
+            });
+            renderChips();
+            saveChips();
+            if (!skipLoad) load(true, 0, "down");
+        }
+
+        function removeChip(index) {
+            chips.splice(index, 1);
+            renderChips();
+            saveChips();
+            load(true, 0, "down");
+        }
+
+        function clearChips(skipLoad) {
+            chips = [];
+            renderChips();
+            saveChips();
+            if (!skipLoad) load(true, 0, "down");
+        }
+
+        let contextChipIndex = -1;
+        const chipContextMenu = document.getElementById('chipContextMenu');
+
+        document.getElementById('chipMenuLogicAnd').addEventListener('click', () => setChipLogic('AND'));
+        document.getElementById('chipMenuLogicOr').addEventListener('click', () => setChipLogic('OR'));
+        document.getElementById('chipMenuLogicNot').addEventListener('click', () => setChipLogic('NOT'));
+
+        function setChipLogic(logic) {
+            chipContextMenu.style.display = 'none';
+            if (contextChipIndex >= 0 && contextChipIndex < chips.length) {
+                chips[contextChipIndex].logic = logic;
+                renderChips();
+                saveChips();
+                load(true, 0, "down");
+            }
+        }
+
+        document.getElementById('chipMenuG1').addEventListener('click', () => setChipGroup(1));
+        document.getElementById('chipMenuG2').addEventListener('click', () => setChipGroup(2));
+        document.getElementById('chipMenuG3').addEventListener('click', () => setChipGroup(3));
+        document.getElementById('chipMenuG4').addEventListener('click', () => setChipGroup(4));
+        document.getElementById('chipMenuG5').addEventListener('click', () => setChipGroup(5));
+        document.getElementById('chipMenuG6').addEventListener('click', () => setChipGroup(6));
+        document.getElementById('chipMenuClear').addEventListener('click', () => setChipGroup(null));
+
+        function setChipGroup(groupId) {
+            chipContextMenu.style.display = 'none';
+            if (contextChipIndex >= 0 && contextChipIndex < chips.length) {
+                if (groupId === null) {
+                    chips[contextChipIndex].group = null;
+                } else {
+                    let currentGroups = chips[contextChipIndex].group;
+                    currentGroups = currentGroups ? (Array.isArray(currentGroups) ? currentGroups : [currentGroups]) : [];
+
+                    const idx = currentGroups.indexOf(groupId);
+                    if (idx >= 0) {
+                        currentGroups.splice(idx, 1);
+                    } else {
+                        currentGroups.push(groupId);
+                    }
+
+                    if (currentGroups.length === 0) {
+                        chips[contextChipIndex].group = null;
+                    } else {
+                        chips[contextChipIndex].group = currentGroups;
+                    }
+                }
+                renderChips();
+                saveChips();
+                load(true, 0, "down");
+            }
+        }
+
+        function renderChips() {
+            chipInputArea.querySelectorAll('.chip').forEach(el => el.remove());
+            chips.forEach((chip, i) => {
+                const el = document.createElement('span');
+                el.className = 'chip ' + (chip.type === 'text' ? 'text' : chip.type);
+                if (chip.group) {
+                    const GROUP_COLORS = { 1: '#ef4444', 2: '#3b82f6', 3: '#22c55e', 4: '#eab308', 5: '#a855f7', 6: '#f97316' };
+                    let groups = Array.isArray(chip.group) ? chip.group : [chip.group];
+                    if (groups.length === 1) {
+                        el.classList.add('group-' + groups[0]);
+                    } else {
+                        // 중첩 그룹: 다중 box-shadow로 표현 (border-radius 유지)
+                        const shadows = groups.map((g, i) => {
+                            const color = GROUP_COLORS[g] || '#888';
+                            const offset = (i + 1) * 2;
+                            return `0 0 0 ${offset}px ${color}`;
+                        });
+                        el.style.boxShadow = shadows.join(', ');
+                        el.style.marginLeft = (groups.length * 2) + 'px';
+                        el.style.marginRight = (groups.length * 2) + 'px';
+                        el.style.marginTop = (groups.length * 2) + 'px';
+                        el.style.marginBottom = (groups.length * 2) + 'px';
+                    }
+                }
+
+                let logicBadge = '';
+                if (chip.logic === 'OR') logicBadge = '<span class="logic-badge logic-OR">또는</span>';
+                else if (chip.logic === 'NOT') logicBadge = '<span class="logic-badge logic-NOT">제외</span>';
+                else logicBadge = '<span class="logic-badge logic-AND">그리고</span>';
+
+                if (i === 0 && chip.logic !== 'NOT') {
+                    logicBadge = '';
+                }
+
+                el.innerHTML = logicBadge;
+                const labelSpan = document.createElement('span');
+                labelSpan.className = 'chip-label';
+                labelSpan.textContent = chip.label;
+                el.appendChild(labelSpan);
+                const removeSpan = document.createElement('span');
+                removeSpan.className = 'chip-remove';
+                removeSpan.setAttribute('data-index', i);
+                removeSpan.innerHTML = '&times;';
+                el.appendChild(removeSpan);
+
+                el.addEventListener('contextmenu', (e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    const contextMenu = document.getElementById('contextMenu');
+                    if (contextMenu) contextMenu.style.display = 'none';
+                    contextChipIndex = i;
+                    chipContextMenu.style.display = 'block';
+
+                    document.querySelectorAll('#chipContextMenu .context-menu-item').forEach(menuEl => {
+                        menuEl.style.backgroundColor = '';
+                    });
+
+                    const activeBg = 'rgba(255, 255, 255, 0.15)';
+                    if (chip.logic === 'OR') document.getElementById('chipMenuLogicOr').style.backgroundColor = activeBg;
+                    else if (chip.logic === 'NOT') document.getElementById('chipMenuLogicNot').style.backgroundColor = activeBg;
+                    else document.getElementById('chipMenuLogicAnd').style.backgroundColor = activeBg;
+
+                    let cGroups = chip.group ? (Array.isArray(chip.group) ? chip.group : [chip.group]) : [];
+                    cGroups.forEach(g => {
+                        let gEl = document.getElementById('chipMenuG' + g);
+                        if (gEl) gEl.style.backgroundColor = activeBg;
+                    });
+
+                    let zoomStr = getComputedStyle(document.body).zoom || "1";
+                    let zoomLevel = parseFloat(zoomStr);
+                    if (zoomStr.endsWith('%')) zoomLevel /= 100;
+                    else if (zoomLevel > 5) zoomLevel /= 100;
+                    if (isNaN(zoomLevel) || zoomLevel <= 0) zoomLevel = 1;
+
+                    const winWidth = window.innerWidth / zoomLevel;
+                    const winHeight = window.innerHeight / zoomLevel;
+                    let left = e.clientX / zoomLevel;
+                    let top = e.clientY / zoomLevel;
+
+                    chipContextMenu.style.maxHeight = '250px';
+                    const rect = chipContextMenu.getBoundingClientRect();
+                    const menuW = rect.width / zoomLevel;
+                    const menuH = rect.height / zoomLevel;
+
+                    if (left + menuW > winWidth) {
+                        left = left - menuW;
+                    }
+                    if (top + menuH > winHeight) {
+                        top = top - menuH;
+                    }
+
+                    if (left < 0) left = 0;
+                    if (top < 0) {
+                        top = 0;
+                        chipContextMenu.style.maxHeight = Math.max(100, winHeight - 10) + 'px';
+                    }
+
+                    chipContextMenu.style.left = left + 'px';
+                    chipContextMenu.style.top = top + 'px';
+                });
+                chipInputArea.insertBefore(el, chipInput);
+            });
+            adjustContentMargin();
+        }
+
+        function saveChips() {
+            localStorage.setItem('chatChips', JSON.stringify(chips));
+        }
+
+        function loadSavedChips() {
+            const urlParams = new URLSearchParams(window.location.search);
+            if (urlParams.has('q')) {
+                const q = urlParams.get('q');
+                chips = parseFilterString(q);
+                renderChips();
+
+                const newUrl = window.location.protocol + "//" + window.location.host + window.location.pathname;
+                window.history.replaceState({ path: newUrl }, '', newUrl);
+                return;
+            }
+
+            try {
+                const saved = localStorage.getItem('chatChips');
+                if (saved) {
+                    chips = JSON.parse(saved);
+                    // migrate old chips to new format
+                    chips.forEach(c => {
+                        if (c.type === 'text_or') { c.type = 'text'; c.logic = 'OR'; }
+                        else if (c.type === 'text_not') { c.type = 'text'; c.logic = 'NOT'; }
+                        if (!c.logic) c.logic = 'AND';
+
+                        // Fix old label text
+                        let baseLabel = CHIP_LABELS[c.type] || c.type;
+                        if (c.type === 'superchat') c.label = '슈퍼챗';
+                        else c.label = baseLabel + ': ' + c.value;
+                    });
+                    renderChips();
+                }
+            } catch (e) { chips = []; }
+        }
+
+        function getFiltersParam() {
+            let transformed = [];
+            let currentGroups = [];
+
+            chips.forEach(c => {
+                let cGroups = c.group ? (Array.isArray(c.group) ? c.group : [c.group]) : [];
+
+                let common = 0;
+                while (common < currentGroups.length && common < cGroups.length && currentGroups[common] === cGroups[common]) common++;
+
+                for (let i = currentGroups.length - 1; i >= common; i--) {
+                    transformed.push({ type: 'group_end', logic: 'AND', value: '' });
+                }
+                for (let i = common; i < cGroups.length; i++) {
+                    let gLogic = (i === cGroups.length - 1) ? c.logic : 'AND';
+                    transformed.push({ type: 'group_start', logic: gLogic, value: '' });
+                }
+
+                let chipCopy = { ...c };
+                delete chipCopy.group;
+                transformed.push(chipCopy);
+
+                currentGroups = cGroups;
+            });
+
+            for (let i = 0; i < currentGroups.length; i++) {
+                transformed.push({ type: 'group_end', logic: 'AND', value: '' });
+            }
+
+            return encodeURIComponent(JSON.stringify(transformed));
+        }
+
+        function decodeMessage(b64) {
+            if (!b64) return {};
+            try {
+                const bin = Uint8Array.from(atob(b64), c => c.charCodeAt(0));
+                const raw = pako.inflateRaw(bin, { to: 'string' });
+                return JSON.parse(raw);
+            } catch (e) { return {}; }
+        }
+
+        function render(element) {
+            const message = decodeMessage(element.message);
+            const d = document.createElement('div');
+            d.className = 'message';
+            d.setAttribute("data-id", element.id);
+            d.setAttribute("data-channel", element.channel);
+
+            // message.m이 없거나 배열이 아닐 경우 빈 배열로 처리
+            const msgArray = Array.isArray(message.m) ? message.m : [];
+
+            d.innerHTML = `
+        <img class="avatar" src="${element.authorThumb}" width="24" height="24">
+        <div class="message-content">
+            <div class="message-header">
+                <span class="username" data-user="${element.authorId}">${element.author}</span>
+                <span class="timestamp">${element.channel} - ${toTimeString(new Date(element.timestamp))}</span>
+            </div>
+            <div class="message-text">
+                ${message.s ? `<div class="super-chat" style="background-color:${message.s.color};">${message.s.amount}</div>` : ''}
+                ${msgArray.map(e => {
+                if (e.url)
+                    return `<img src="${e.url}" width="24" height="24">`;
+                return e.text;
+            }).join('')}
+            </div>
+        </div>`;
+            const e2 = d.getElementsByClassName("message-text")[0];
+            e2.addEventListener('dblclick', function (e) {
+                e.preventDefault();
+                const channel = findParentDataId(e.target, "data-channel");
+                const targetID = parseInt(findParentDataId(e.target, "data-id"));
+                clearChips(true);
+                addChip('ch:' + channel, true);
+                load(true, targetID, "up|down").then(() => {
+                    const el = document.querySelector(`[data-id='${targetID}']`);
+                    if (el) {
+                        el.classList.add("highlight");
+                        setTimeout(() => el.classList.remove("highlight"), 500);
+                        el.scrollIntoView({ behavior: "auto", block: "center" });
+                    }
+                });
+            });
+            const e3 = d.getElementsByClassName("username")[0];
+            e3.addEventListener('dblclick', function (e) {
+                e.preventDefault();
+                addChip('@' + e.target.getAttribute("data-user"));
+            });
+            e3.addEventListener('contextmenu', function (e) {
+                e.preventDefault();
+                const chipContextMenu = document.getElementById('chipContextMenu');
+                if (chipContextMenu) chipContextMenu.style.display = 'none';
+                currentContextAuthorId = e.target.getAttribute("data-user");
+                contextMenu.style.display = 'block';
+
+                let zoomStr = getComputedStyle(document.body).zoom || "1";
+                let zoomLevel = parseFloat(zoomStr);
+                if (zoomStr.endsWith('%')) zoomLevel /= 100;
+                else if (zoomLevel > 5) zoomLevel /= 100;
+                if (isNaN(zoomLevel) || zoomLevel <= 0) zoomLevel = 1;
+
+                const winWidth = window.innerWidth / zoomLevel;
+                const winHeight = window.innerHeight / zoomLevel;
+                let left = e.clientX / zoomLevel;
+                let top = e.clientY / zoomLevel;
+
+                contextMenu.style.maxHeight = '250px';
+                const rect = contextMenu.getBoundingClientRect();
+                const menuW = rect.width / zoomLevel;
+                const menuH = rect.height / zoomLevel;
+
+                if (left + menuW > winWidth) {
+                    left = left - menuW;
+                }
+                if (top + menuH > winHeight) {
+                    top = top - menuH;
+                }
+
+                if (left < 0) left = 0;
+                if (top < 0) {
+                    top = 0;
+                    contextMenu.style.maxHeight = Math.max(100, winHeight - 10) + 'px';
+                }
+
+                contextMenu.style.left = left + 'px';
+                contextMenu.style.top = top + 'px';
+            });
+
+            let touchTimer;
+            let touchStartX = 0, touchStartY = 0;
+            let contextMenuOpened = false;
+
+            e3.addEventListener('touchstart', function (e) {
+                if (e.touches && e.touches.length === 1) {
+                    touchStartX = e.touches[0].clientX;
+                    touchStartY = e.touches[0].clientY;
+                    contextMenuOpened = false;
+                    touchTimer = setTimeout(function () {
+                        contextMenuOpened = true;
+                        const chipContextMenu = document.getElementById('chipContextMenu');
+                        if (chipContextMenu) chipContextMenu.style.display = 'none';
+                        currentContextAuthorId = e3.getAttribute("data-user");
+                        contextMenu.style.display = 'block';
+
+                        let zoomStr = getComputedStyle(document.body).zoom || "1";
+                        let zoomLevel = parseFloat(zoomStr);
+                        if (zoomStr.endsWith('%')) zoomLevel /= 100;
+                        else if (zoomLevel > 5) zoomLevel /= 100;
+                        if (isNaN(zoomLevel) || zoomLevel <= 0) zoomLevel = 1;
+
+                        const winWidth = window.innerWidth / zoomLevel;
+                        const winHeight = window.innerHeight / zoomLevel;
+                        let left = touchStartX / zoomLevel;
+                        let top = touchStartY / zoomLevel;
+
+                        contextMenu.style.maxHeight = '250px';
+                        const rect = contextMenu.getBoundingClientRect();
+                        const menuW = rect.width / zoomLevel;
+                        const menuH = rect.height / zoomLevel;
+
+                        if (left + menuW > winWidth) {
+                            left = left - menuW;
+                        }
+                        if (top + menuH > winHeight) {
+                            top = top - menuH;
+                        }
+
+                        if (left < 0) left = 0;
+                        if (top < 0) {
+                            top = 0;
+                            contextMenu.style.maxHeight = Math.max(100, winHeight - 10) + 'px';
+                        }
+
+                        contextMenu.style.left = left + 'px';
+                        contextMenu.style.top = top + 'px';
+                    }, 500);
+                }
+            });
+
+            e3.addEventListener('touchmove', function (e) {
+                if (touchTimer && e.touches && e.touches.length > 0) {
+                    const dx = e.touches[0].clientX - touchStartX;
+                    const dy = e.touches[0].clientY - touchStartY;
+                    if (Math.abs(dx) > 10 || Math.abs(dy) > 10) {
+                        clearTimeout(touchTimer);
+                        touchTimer = null;
+                    }
+                }
+            });
+
+            e3.addEventListener('touchend', function (e) {
+                if (touchTimer) {
+                    clearTimeout(touchTimer);
+                    touchTimer = null;
+                }
+                if (contextMenuOpened) {
+                    if (e.cancelable) e.preventDefault();
+                    e.stopPropagation();
+                }
+            });
+
+            e3.addEventListener('touchcancel', function (e) {
+                if (touchTimer) {
+                    clearTimeout(touchTimer);
+                    touchTimer = null;
+                }
+            });
+            return d;
+        }
+        function setScrollPos(pos) {
+            document.documentElement.scrollTop = pos;
+        }
+        function toTimeString(now) {
+            const y = now.getFullYear();
+            const m = String(now.getMonth() + 1).padStart(2, '0');
+            const d = String(now.getDate()).padStart(2, '0');
+            const h = String(now.getHours()).padStart(2, '0');
+            const min = String(now.getMinutes()).padStart(2, '0');
+            const s = String(now.getSeconds()).padStart(2, '0');
+            return `${y}-${m}-${d} ${h}:${min}:${s}`;
+        }
+
+        function showLoading() {
+            const d = document.createElement('div');
+            d.className = 'loading';
+            d.id = 'loader';
+            d.innerHTML = '<div class="spinner"></div> 로딩중...';
+            chatMessages.appendChild(d);
+        }
+        function hideLoading() {
+            const l = document.getElementById('loader');
+            l && l.remove();
+        }
+        function showEnd() {
+            const d = document.createElement('div');
+            d.className = 'no-more';
+            d.textContent = '더 이상 메시지가 없습니다';
+            chatMessages.appendChild(d);
+        }
+        function showEmpty() {
+            chatMessages.innerHTML = '<div class="empty">' +
+                '<svg width="48" height="48" viewBox="0 0 24 24" fill="#717171">' +
+                '<path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm0 14H6l-2 2V4h16v12z"/>' +
+                '</svg>' +
+                '<span>검색 결과가 없습니다</span>' +
+                '</div>';
+        }
+        async function load(reset = false, targetID = 0, dir = "down") {
+            if (!reset) {
+                if (!hasMoreD && dir.includes("down")) return;
+                if (!hasMoreU && dir.includes("up")) return;
+            }
+            const myVersion = ++loadVersion;
+            if (reset) {
+                hasMoreD = hasMoreU = true;
+                firstID = 0;
+                lastID = 999999999999999;
+                if (timer) { clearTimeout(timer); timer = null; }
+                chatMessages.innerHTML = '';
+                setScrollPos(0);
+                if (targetID > 0) lastID = firstID = targetID;
+            }
+            const filtersParam = getFiltersParam();
+            const getContents = async (a, b) => {
+                showLoading();
+                try {
+                    const res = await fetch(
+                        `/${a}?filters=${filtersParam}&start=${b}`
+                    );
+                    if (loadVersion !== myVersion) { hideLoading(); return false; }
+                    const json = await res.json();
+                    if (loadVersion !== myVersion) { hideLoading(); return false; }
+                    hideLoading();
+                    if (json.length > 0) {
+                        if (a === "data") {
+                            const frag = document.createDocumentFragment();
+                            json.forEach(m => frag.appendChild(render(m)));
+                            chatMessages.appendChild(frag);
+                            const l_id = json[json.length - 1].id;
+                            if (l_id < lastID) lastID = l_id;
+                        }
+                        else if (a === "udata") {
+                            const scrollHeight = document.documentElement.scrollHeight;
+                            const frag = document.createDocumentFragment();
+                            // 서버는 ASC(오래된→최신)로 보내지만, 화면은 DESC(최신→오래된)이므로 역순 렌더링
+                            for (let i = json.length - 1; i >= 0; i--) frag.appendChild(render(json[i]));
+                            chatMessages.prepend(frag);
+                            setScrollPos(document.documentElement.scrollHeight - scrollHeight);
+                            const f_id = json[0].id;
+                            if (firstID === 0 || f_id < firstID) firstID = f_id;
+                            const l_id = json[json.length - 1].id;
+                            if (l_id >= firstID) firstID = l_id + 1;
+                        }
+                    } else {
+                        if (dir.includes("up")) hasMoreU = false;
+                        if (dir.includes("down")) {
+                            hasMoreD = false;
+                            lastID === 999999999999999 ? showEmpty() : showEnd();
+                        }
+                    }
+                } catch (e) {
+                    hideLoading();
+                    console.error(e);
+                    return false;
+                }
+                return true;
+            };
+            loading = true;
+            if (dir.includes("up")) await getContents("udata", firstID);
+            if (loadVersion !== myVersion) { loading = false; return; }
+            if (dir.includes("down")) await getContents("data", lastID);
+            loading = false;
+        }
+        let scrollTicking = false;
+        function onScroll() {
+            if (scrollTicking) return;
+            scrollTicking = true;
+            requestAnimationFrame(() => {
+                scrollTicking = false;
+                const { scrollTop, scrollHeight, clientHeight } = document.documentElement;
+                const bottom = scrollHeight - scrollTop - clientHeight;
+                if (loading) return;
+                if (bottom < 200 && hasMoreD) load(false, 0, "down");
+                else if (scrollTop < 100 && hasMoreU && firstID > 0) load(false, 0, "up");
+            });
+        }
+        function findParentDataId(element, attr) {
+            let current = element.parentNode;
+            while (current && current.nodeType === 1) {
+                if (current.hasAttribute(attr)) return current.getAttribute(attr);
+                current = current.parentNode;
+            }
+            return null;
+        }
+        function adjustContentMargin() {
+            const header = document.querySelector('.chat-header');
+            const content = document.querySelector('.chat-messages');
+            content.style.paddingTop = (header.offsetHeight + 20) + 'px';
+        }
+
+        function resizeChipInput() {
+            chipInput.style.height = 'auto';
+            if (chipInput.value !== '') {
+                chipInput.style.height = chipInput.scrollHeight + 'px';
+            }
+
+            let estWidth = 30;
+            const val = chipInput.value;
+            for (let i = 0; i < val.length; i++) {
+                estWidth += val.charCodeAt(i) > 255 ? 13 : 8;
+            }
+            chipInput.style.minWidth = `clamp(130px, ${estWidth}px, 100%)`;
+
+            adjustContentMargin();
+        }
+        chipInput.addEventListener('input', resizeChipInput);
+
+        // chip 클릭 이벤트 (삭제 버튼)
+        chipInputArea.addEventListener('click', (e) => {
+            if (e.target.classList.contains('chip-remove')) {
+                removeChip(parseInt(e.target.getAttribute('data-index')));
+                return;
+            }
+            if (e.target !== chipTypeSelect) {
+                chipInput.focus();
+            }
+        });
+
+        // 콤보박스 변경 이벤트
+        chipTypeSelect.addEventListener('change', () => {
+            const valSplit = chipTypeSelect.value.split('|');
+            const logic = valSplit[0];
+            const type = valSplit[1];
+
+            if (document.activeElement !== chipInput) {
+                chipInput.focus();
+            }
+
+            setTimeout(() => {
+                let appendStr = '';
+                if (logic === 'OR') appendStr += 'OR ';
+                else if (logic === 'NOT') appendStr += '-';
+                else if (logic === 'AND' && type === 'text') appendStr += 'AND ';
+
+                if (type === 'superchat') appendStr += 'is:슈퍼챗 ';
+                else if (type !== 'text') {
+                    const label = CHIP_LABELS[type] || type;
+                    appendStr += label + ':';
+                }
+
+                const caretPos = chipInput.selectionStart;
+                const textBefore = chipInput.value.substring(0, caretPos);
+                const textAfter = chipInput.value.substring(caretPos);
+
+                let prefix = '';
+                let suffix = '';
+                if (textBefore.length > 0 && !textBefore.endsWith(' ')) prefix = ' ';
+                if (textAfter.length > 0 && !textAfter.startsWith(' ')) suffix = ' ';
+
+                chipInput.value = textBefore + prefix + appendStr + suffix + textAfter;
+                chipInput.selectionStart = chipInput.selectionEnd = caretPos + prefix.length + appendStr.length;
+
+                chipTypeSelect.value = '';
+                resizeChipInput();
+            }, 10);
+        });
+
+        let isEditingText = false;
+        let originalText = '';
+
+        chipInput.addEventListener('focus', () => {
+            if (!isEditingText) {
+                isEditingText = true;
+                document.querySelectorAll('.chip').forEach(el => el.style.display = 'none');
+                const text = chipsToText(chips);
+                originalText = text;
+                chipInput.value = text + (text.length > 0 ? ' ' : '');
+                resizeChipInput();
+
+                // 마우스 클릭 위치에 따라 캐럿이 중간에 생기는 현상 방지 (무조건 맨 끝으로 이동)
+                setTimeout(() => {
+                    chipInput.selectionStart = chipInput.selectionEnd = chipInput.value.length;
+                }, 0);
+            }
+        });
+
+        chipInput.addEventListener('blur', () => {
+            setTimeout(() => {
+                if (chipInputArea.contains(document.activeElement)) {
+                    return;
+                }
+                const text = chipInput.value.trim();
+                if (text !== originalText.trim()) {
+                    // 텍스트가 수정되었다면, 엔터를 치기 전까지 칩으로 돌아가지 않고 텍스트 모드 유지
+                    return;
+                }
+
+                isEditingText = false;
+                chipInput.value = '';
+                resizeChipInput();
+                renderChips();
+            }, 10);
+        });
+
+        // chip 입력 이벤트
+        chipInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                if (isEditingText) {
+                    const text = chipInput.value.trim();
+                    if (text !== originalText.trim()) {
+                        chips = parseFilterString(text);
+                        saveChips();
+                        load(true, 0, "down");
+                        originalText = text; // 블러 이벤트에서 칩으로 정상적으로 돌아가도록 동기화
+                    }
+                }
+                chipInput.blur();
+            }
+        });
+
+        // Context Menu & History Modal
+        document.addEventListener('click', (e) => {
+            if (e.target !== contextMenu && !contextMenu.contains(e.target)) {
+                contextMenu.style.display = 'none';
+            }
+            const chipContextMenu = document.getElementById('chipContextMenu');
+            if (chipContextMenu && e.target !== chipContextMenu && !chipContextMenu.contains(e.target)) {
+                chipContextMenu.style.display = 'none';
+            }
+        });
+
+        async function openHistoryModal(authorId) {
+            if (!authorId) return;
+
+            historyModalOverlay.style.display = 'flex';
+            historyModalContent.innerHTML = '<div class="loading"><div class="spinner"></div> 로딩중...</div>';
+
+            try {
+                const res = await fetch('/api/user_history/' + encodeURIComponent(authorId));
+                const data = await res.json();
+
+                if (!data || data.length === 0) {
+                    historyModalContent.innerHTML = '<div class="empty">이력이 없습니다.</div>';
+                    return;
+                }
+
+                historyModalContent.innerHTML = '';
+                data.forEach(item => {
+                    const dateStr = new Date(item.first_seen).toLocaleString();
+                    const d = document.createElement('div');
+                    d.className = 'history-item';
+                    d.innerHTML = `
+                        <img class="history-item-thumb" src="${item.thumb}" onerror="this.src='data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI0MCIgaGVpZ2h0PSI0MCI+PHJlY3Qgd2lkdGg9IjQwIiBoZWlnaHQ9IjQwIiBmaWxsPSIjMzAzMDMwIi8+PC9zdmc+'">
+                        <div class="history-item-info">
+                            <div class="history-item-name">${item.author}</div>
+                            <div class="history-item-date">${dateStr}</div>
+                        </div>
+                    `;
+                    historyModalContent.appendChild(d);
+                });
+            } catch (err) {
+                historyModalContent.innerHTML = '<div class="empty">불러오기 실패</div>';
+            }
+        }
+
+        contextMenuHistory.addEventListener('click', () => {
+            contextMenu.style.display = 'none';
+            openHistoryModal(currentContextAuthorId);
+        });
+
+        function addConditionFromContextMenu(logicPrefix) {
+            contextMenu.style.display = 'none';
+            if (!currentContextAuthorId) return;
+
+            let prefixToAdd = logicPrefix === 'AND' ? '' : logicPrefix + ' ';
+
+            if (isEditingText) {
+                const appendStr = prefixToAdd + '@' + currentContextAuthorId;
+                const caretPos = chipInput.selectionStart || chipInput.value.length;
+                const textBefore = chipInput.value.substring(0, caretPos);
+                const textAfter = chipInput.value.substring(caretPos);
+                let prefix = '';
+                let suffix = '';
+                if (textBefore.length > 0 && !textBefore.endsWith(' ')) prefix = ' ';
+                if (textAfter.length > 0 && !textAfter.startsWith(' ')) suffix = ' ';
+                chipInput.value = textBefore + prefix + appendStr + suffix + textAfter;
+                chipInput.selectionStart = chipInput.selectionEnd = caretPos + prefix.length + appendStr.length;
+                resizeChipInput();
+                chipInput.focus();
+            } else {
+                addChip(prefixToAdd + '@' + currentContextAuthorId);
+            }
+        }
+
+        document.getElementById('contextMenuAddAnd').addEventListener('click', () => addConditionFromContextMenu('AND'));
+        document.getElementById('contextMenuAddOr').addEventListener('click', () => addConditionFromContextMenu('OR'));
+        document.getElementById('contextMenuAddNot').addEventListener('click', () => addConditionFromContextMenu('NOT'));
+
+        historyModalClose.addEventListener('click', () => {
+            historyModalOverlay.style.display = 'none';
+        });
+
+        historyModalOverlay.addEventListener('click', (e) => {
+            if (e.target === historyModalOverlay) {
+                historyModalOverlay.style.display = 'none';
+            }
+        });
+
+        // Deep Scan Modal Logic
+        const esc = (s) => { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; };
+
+        function updateDsWeightLabels() {
+            dsWsLabel.textContent = dsWsSlider.value + '%';
+            dsWiLabel.textContent = dsWiSlider.value + '%';
+            dsWrLabel.textContent = dsWrSlider.value + '%';
+
+            // Save to localStorage
+            localStorage.setItem('ds_weight_style', dsWsSlider.value);
+            localStorage.setItem('ds_weight_interest', dsWiSlider.value);
+            localStorage.setItem('ds_weight_rare', dsWrSlider.value);
+        }
+
+        // Load from localStorage if exists
+        let lsWs = localStorage.getItem('ds_weight_style') ?? "0";
+        let lsWi = localStorage.getItem('ds_weight_interest') ?? "0";
+        let lsWr = localStorage.getItem('ds_weight_rare') ?? "100";
+
+        if (lsWs) dsWsSlider.value = lsWs;
+        if (lsWi) dsWiSlider.value = lsWi;
+        if (lsWr) dsWrSlider.value = lsWr;
+        updateDsWeightLabels();
+
+        dsWsSlider.addEventListener('input', updateDsWeightLabels);
+        dsWiSlider.addEventListener('input', updateDsWeightLabels);
+        dsWrSlider.addEventListener('input', updateDsWeightLabels);
+
+        contextMenuDeepScan.addEventListener('click', () => {
+            contextMenu.style.display = 'none';
+            if (!currentContextAuthorId) return;
+
+            deepScanModalOverlay.style.display = 'flex';
+            deepScanResults.innerHTML = '';
+
+            // Automatically trigger scan on open
+            doDeepScan();
+        });
+
+        deepScanBtn.addEventListener('click', doDeepScan);
+
+        deepScanModalClose.addEventListener('click', () => {
+            deepScanModalOverlay.style.display = 'none';
+        });
+
+        deepScanModalOverlay.addEventListener('click', (e) => {
+            if (e.target === deepScanModalOverlay) {
+                deepScanModalOverlay.style.display = 'none';
+            }
+        });
+
+        async function doDeepScan() {
+            if (!currentContextAuthorId) return;
+
+            deepScanBtn.disabled = true;
+            deepScanBtn.textContent = "Scanning...";
+            deepScanResults.innerHTML = '<div style="text-align:center; padding: 20px; color: #a1a1aa;"><div class="spinner" style="display:inline-block; width:20px; height:20px; border:2px solid #27272a; border-top-color:#3b82f6; border-radius:50%; animation:spin 1s linear infinite;"></div><br>Analyzing patterns...</div>';
+
+            try {
+                const ws = parseInt(dsWsSlider.value) / 100;
+                const wi = parseInt(dsWiSlider.value) / 100;
+                const wr = parseInt(dsWrSlider.value) / 100;
+                const targetUrl = `${window.location.protocol}//${window.location.hostname}:3001/api/analyze?target=${encodeURIComponent(currentContextAuthorId)}&ws=${ws}&wi=${wi}&wr=${wr}`;
+                const res = await fetch(targetUrl);
+                const data = await res.json();
+
+                if (!res.ok) throw new Error(data.error);
+
+                deepScanResults.innerHTML = '';
+
+                if (data.results.length === 0) {
+                    deepScanResults.innerHTML = '<div style="text-align:center; padding: 20px; color: #a1a1aa;">No high-confidence matches found.</div>';
+                } else {
+                    data.results.forEach((r, idx) => {
+                        const simPct = (r.similarity * 100).toFixed(1);
+                        const stylePct = (r.styleSim * 100).toFixed(1);
+                        const intPct = (r.interestSim * 100).toFixed(1);
+                        const rarePct = ((r.rareSim || 0) * 100).toFixed(1);
+
+                        let rankClass = 'rank-other';
+                        if (idx === 0) rankClass = 'rank-1';
+                        else if (idx === 1) rankClass = 'rank-2';
+                        else if (idx === 2) rankClass = 'rank-3';
+
+                        const card = document.createElement('div');
+                        card.className = 'result-card';
+
+                        const ti = r.topInterests || {};
+                        let interestHTML = '';
+
+                        if (ti.channels && ti.channels.length > 0) {
+                            interestHTML += `<div class="section-label">📺 공통 채널</div>`;
+                            interestHTML += ti.channels.map(c => `<div class="keyword-tag channel-tag">${esc(c)}</div>`).join('');
+                        }
+                        if (ti.topics && ti.topics.length > 0) {
+                            interestHTML += `<div class="section-label">💬 공통 관심사</div>`;
+                            interestHTML += ti.topics.map(t => `<div class="keyword-tag interest-tag">${esc(t)}</div>`).join('');
+                        }
+                        if (ti.opinions && ti.opinions.length > 0) {
+                            interestHTML += `<div class="section-label">🎯 공통 선호도</div>`;
+                            interestHTML += ti.opinions.map(o => `<div class="keyword-tag opinion-tag">${esc(o)}</div>`).join('');
+                        }
+
+                        const rt = r.rareTerms || [];
+                        let rareHTML = '';
+                        if (rt.length > 0) {
+                            rareHTML = `<div class="section-label">🔥 희귀 공유 용어 (둘만 쓰는 단어)</div>`;
+                            rareHTML += rt.map(x => `<div class="keyword-tag rare-tag">${esc(x.term)}<span class="df-badge">${x.users}명</span></div>`).join('');
+                        }
+
+                        card.innerHTML = `
+                            <div class="card-top">
+                                <div class="user-info">
+                                    <h3>
+                                        <span class="rank-badge ${rankClass}">#${idx + 1}</span>
+                                        <span class="scan-username" style="cursor: pointer; text-decoration: underline;" data-user="${esc(r.authorId)}">${esc(r.authorName || 'Unknown User')}</span>
+                                    </h3>
+                                    <div class="user-id"><span class="scan-userid" style="cursor: pointer; text-decoration: underline;" data-user="${esc(r.authorId)}">${esc(r.authorId)}</span> &middot; ${r.msgCount} msgs</div>
+                                </div>
+                                <div class="match-score">
+                                    <div class="score-value">${simPct}%</div>
+                                    <div class="score-label">Combined</div>
+                                </div>
+                            </div>
+                            <div class="score-bars">
+                                <div class="score-bar-item">
+                                    <div class="score-bar-header">
+                                        <span>✍️ 문체</span>
+                                        <span class="val">${stylePct}%</span>
+                                    </div>
+                                    <div class="score-bar-track">
+                                        <div class="score-bar-fill style" style="width: ${Math.min(stylePct, 100)}%"></div>
+                                    </div>
+                                </div>
+                                <div class="score-bar-item">
+                                    <div class="score-bar-header">
+                                        <span>🎯 관심사</span>
+                                        <span class="val">${intPct}%</span>
+                                    </div>
+                                    <div class="score-bar-track">
+                                        <div class="score-bar-fill interest" style="width: ${Math.min(intPct, 100)}%"></div>
+                                    </div>
+                                </div>
+                                <div class="score-bar-item">
+                                    <div class="score-bar-header">
+                                        <span>🔥 희귀용어</span>
+                                        <span class="val">${rarePct}%</span>
+                                    </div>
+                                    <div class="score-bar-track">
+                                        <div class="score-bar-fill rare" style="width: ${Math.min(rarePct, 100)}%"></div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="keywords">
+                                ${rareHTML}
+                                <div class="section-label">✍️ 문체 유사 패턴</div>
+                                ${r.topTerms.map(t => `<div class="keyword-tag">${esc(t)}</div>`).join('')}
+                                ${interestHTML}
+                            </div>
+                        `;
+                        const usernameEl = card.querySelector('.scan-username');
+                        if (usernameEl) {
+                            usernameEl.addEventListener('click', () => {
+                                openHistoryModal(usernameEl.getAttribute('data-user'));
+                            });
+                        }
+
+                        const useridEl = card.querySelector('.scan-userid');
+                        if (useridEl) {
+                            useridEl.addEventListener('click', () => {
+                                const uid = useridEl.getAttribute('data-user');
+                                window.open(window.location.pathname + '?q=' + encodeURIComponent('@' + uid), '_blank');
+                            });
+                        }
+                        deepScanResults.appendChild(card);
+                    });
+                }
+            } catch (err) {
+                deepScanResults.innerHTML = `<div style="text-align:center; padding: 20px; color: #ef4444;">오류 발생: ${esc(err.message)}</div>`;
+            } finally {
+                deepScanBtn.disabled = false;
+                deepScanBtn.textContent = "Scan Now";
+            }
+        }
+
+        // ═══════════════════════════════════════════════════════════════
+        // Channel Manager
+        // ═══════════════════════════════════════════════════════════════
+        const channelModalOverlay = document.getElementById('channelModalOverlay');
+        const channelModalClose = document.getElementById('channelModalClose');
+        const channelAddInput = document.getElementById('channelAddInput');
+        const channelAddBtn = document.getElementById('channelAddBtn');
+        const channelList = document.getElementById('channelList');
+        const channelModalStatus = document.getElementById('channelModalStatus');
+
+        // YouTube URL / ID 파싱
+        function parseYouTubeId(raw) {
+            const s = raw.trim();
+            if (!s) return null;
+
+            // 이미 순수 ID 형태 (영숫자 + 언더스코어 + 하이픈, 6~20자)
+            if (/^[A-Za-z0-9_-]{6,25}$/.test(s)) return s;
+
+            try {
+                const url = new URL(s.startsWith('http') ? s : 'https://' + s);
+                // youtu.be/VIDEO_ID
+                if (url.hostname === 'youtu.be') return url.pathname.slice(1) || null;
+                // youtube.com/watch?v=...
+                const v = url.searchParams.get('v');
+                if (v) return v;
+                // youtube.com/live/VIDEO_ID
+                const parts = url.pathname.split('/').filter(Boolean);
+                const liveIdx = parts.indexOf('live');
+                if (liveIdx >= 0 && parts[liveIdx + 1]) return parts[liveIdx + 1];
+            } catch { }
+
+            return null;
+        }
+
+        function setChannelStatus(msg, type = 'info') {
+            channelModalStatus.textContent = msg;
+            channelModalStatus.className = 'channel-modal-status ' + type;
+        }
+
+        async function fetchChannelList() {
+            try {
+                const res = await fetch('/list');
+                if (!res.ok) throw new Error('목록 로드 실패');
+                return await res.json();
+            } catch {
+                return null;
+            }
+        }
+
+        async function renderChannelList() {
+            channelList.innerHTML = '<div class="channel-empty"><svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><path d="M12 4V1L8 5l4 4V6c3.31 0 6 2.69 6 6s-2.69 6-6 6-6-2.69-6-6H4c0 4.42 3.58 8 8 8s8-3.58 8-8-3.58-8-8-8z"/></svg>로딩 중...</div>';
+
+            const data = await fetchChannelList();
+            if (!data) {
+                channelList.innerHTML = '<div class="channel-empty">목록을 불러올 수 없습니다</div>';
+                return;
+            }
+
+            const items = Array.isArray(data) ? data : (data.data || []);
+
+            if (items.length === 0) {
+                channelList.innerHTML = `
+                    <div class="channel-empty">
+                        <svg width="32" height="32" viewBox="0 0 24 24" fill="currentColor">
+                            <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm5 11h-4v4h-2v-4H7v-2h4V7h2v4h4v2z"/>
+                        </svg>
+                        등록된 채널 없음<br>
+                        <small style="font-size:11px;margin-top:4px;display:block;">위에서 채널 ID 또는 YouTube URL을 추가하세요</small>
+                    </div>`;
+                return;
+            }
+
+            channelList.innerHTML = '';
+            items.forEach(item => {
+                const id = item.id || item;
+                const el = document.createElement('div');
+                el.className = 'channel-item';
+                el.setAttribute('data-channel-id', id);
+                el.innerHTML = `
+                    <div class="channel-item-dot"></div>
+                    <span class="channel-item-id" title="${id}">${id}</span>
+                    <div class="channel-item-actions">
+                        <button class="channel-filter-btn">필터</button>
+                        <button class="channel-delete-btn">삭제</button>
+                    </div>`;
+
+                // 채널 ID 클릭 → YouTube 열기
+                el.querySelector('.channel-item-id').addEventListener('click', () => {
+                    window.open('https://www.youtube.com/watch?v=' + encodeURIComponent(id), '_blank');
+                });
+
+                // 필터 버튼 → 채팅 목록을 이 채널로 필터링
+                el.querySelector('.channel-filter-btn').addEventListener('click', () => {
+                    closeChannelModal();
+                    // 이미 같은 채널 필터가 있으면 skip
+                    if (!chips.some(c => c.type === 'channel' && c.value === id)) {
+                        chips = [];
+                        chips.push(makeChip('channel', 'AND', id));
+                        renderChips();
+                        saveChips();
+                        load(true, 0, 'down');
+                    }
+                });
+
+                // 삭제 버튼
+                el.querySelector('.channel-delete-btn').addEventListener('click', async () => {
+                    const btn = el.querySelector('.channel-delete-btn');
+                    btn.disabled = true;
+                    btn.textContent = '...';
+                    setChannelStatus('삭제 중...', 'info');
+                    try {
+                        const res = await fetch('/delete/' + encodeURIComponent(id));
+                        const json = await res.json();
+                        if (json.message === 'Item not found') {
+                            setChannelStatus('이미 삭제된 채널입니다', 'err');
+                        } else {
+                            setChannelStatus(`"${id}" 삭제됨`, 'ok');
+                            el.style.transition = 'opacity 0.2s, max-height 0.25s';
+                            el.style.overflow = 'hidden';
+                            el.style.maxHeight = el.offsetHeight + 'px';
+                            requestAnimationFrame(() => {
+                                el.style.maxHeight = '0';
+                                el.style.opacity = '0';
+                                el.style.padding = '0';
+                            });
+                            setTimeout(() => el.remove(), 270);
+                        }
+                    } catch {
+                        setChannelStatus('삭제 실패 — 서버 오류', 'err');
+                        btn.disabled = false;
+                        btn.textContent = '삭제';
+                    }
+                });
+
+                channelList.appendChild(el);
+            });
+
+            setChannelStatus(items.length + '개 채널 등록됨', 'info');
+        }
+
+        async function addChannel() {
+            const raw = channelAddInput.value.trim();
+            if (!raw) { channelAddInput.focus(); return; }
+
+            const id = parseYouTubeId(raw);
+            if (!id) {
+                setChannelStatus('올바른 채널 ID 또는 YouTube URL을 입력하세요', 'err');
+                channelAddInput.select();
+                return;
+            }
+
+            channelAddBtn.disabled = true;
+            channelAddBtn.textContent = '...';
+            setChannelStatus('추가 중...', 'info');
+
+            try {
+                const res = await fetch('/create/' + encodeURIComponent(id));
+                const json = await res.json();
+
+                if (json.message === 'Already Exists') {
+                    setChannelStatus(`"${id}" 은 이미 등록되어 있습니다`, 'err');
+                } else {
+                    setChannelStatus(`"${id}" 추가됨 — 채팅 수집 시작`, 'ok');
+                    channelAddInput.value = '';
+                    await renderChannelList();
+                }
+            } catch {
+                setChannelStatus('추가 실패 — 서버 오류', 'err');
+            } finally {
+                channelAddBtn.disabled = false;
+                channelAddBtn.textContent = '추가';
+                channelAddInput.focus();
+            }
+        }
+
+        function openChannelModal() {
+            channelModalOverlay.style.display = 'flex';
+            channelAddInput.value = '';
+            setChannelStatus('', 'info');
+            renderChannelList();
+            setTimeout(() => channelAddInput.focus(), 100);
+        }
+
+        function closeChannelModal() {
+            channelModalOverlay.style.display = 'none';
+        }
+
+        channelModalClose.addEventListener('click', closeChannelModal);
+
+        channelModalOverlay.addEventListener('click', (e) => {
+            if (e.target === channelModalOverlay) closeChannelModal();
+        });
+
+        channelAddBtn.addEventListener('click', addChannel);
+
+        channelAddInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                addChannel();
+            } else if (e.key === 'Escape') {
+                closeChannelModal();
+            }
+        });
+
+        // 서버에 /list 엔드포인트가 없으면 data.json 기반으로 fallback 처리
+        // (youtube_log.js 에서 /list 엔드포인트 추가 필요, 없으면 빈 목록 표시)
+
+        // 초기화
+        loadSavedChips();
+        window.addEventListener('scroll', onScroll);
+        window.addEventListener('resize', resizeChipInput);
+        mainLogo.addEventListener('mousedown', (e) => {
+            e.preventDefault();
+            clearChips(true);
+            location.reload();
+        });
+        channelLogo.addEventListener('mousedown', (e) => {
+            e.preventDefault();
+            openChannelModal();
+        });
+        resizeChipInput();
+        load(false, 0, "down");
+    </script>
+</body>
+
+</html>

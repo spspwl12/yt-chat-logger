@@ -1,0 +1,715 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Stylometry Analysis</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+
+        :root {
+            --bg: #000000;
+            --bg-card: #0a0a0a;
+            --border: #27272a;
+            --text-main: #f4f4f5;
+            --text-muted: #a1a1aa;
+            --primary: #3b82f6;
+            --primary-hover: #2563eb;
+            --accent: #8b5cf6;
+            --interest: #10b981;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            background-color: var(--bg);
+            color: var(--text-main);
+            line-height: 1.5;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* Header */
+        header {
+            border-bottom: 1px solid var(--border);
+            background: rgba(0, 0, 0, 0.8);
+            backdrop-filter: blur(12px);
+            position: sticky;
+            top: 0;
+            z-index: 100;
+            padding: 16px 32px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .logo {
+            font-size: 18px;
+            font-weight: 700;
+            letter-spacing: -0.5px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .logo-icon {
+            width: 24px;
+            height: 24px;
+            background: linear-gradient(135deg, var(--primary), var(--accent));
+            border-radius: 6px;
+        }
+
+        .status-badge {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 13px;
+            font-weight: 500;
+            color: var(--text-muted);
+            background: var(--bg-card);
+            padding: 6px 14px;
+            border-radius: 20px;
+            border: 1px solid var(--border);
+        }
+
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background-color: #ef4444;
+        }
+        .status-dot.online { background-color: #22c55e; box-shadow: 0 0 10px rgba(34, 197, 94, 0.4); }
+        .status-dot.busy { background-color: #eab308; box-shadow: 0 0 10px rgba(234, 179, 8, 0.4); }
+
+        /* Main Container */
+        main {
+            flex: 1;
+            width: 100%;
+            max-width: 900px;
+            margin: 0 auto;
+            padding: 40px 24px;
+            display: flex;
+            flex-direction: column;
+            gap: 24px;
+        }
+
+        /* Search Section */
+        .search-container {
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+            background: var(--bg-card);
+            padding: 32px;
+            border-radius: 16px;
+            border: 1px solid var(--border);
+        }
+
+        h1 {
+            font-size: 24px;
+            font-weight: 600;
+            letter-spacing: -0.5px;
+        }
+
+        .search-box {
+            display: flex;
+            gap: 12px;
+        }
+
+        input[type="text"] {
+            flex: 1;
+            background: var(--bg);
+            border: 1px solid var(--border);
+            color: var(--text-main);
+            padding: 14px 16px;
+            border-radius: 8px;
+            font-size: 15px;
+            font-family: inherit;
+            outline: none;
+            transition: border-color 0.2s;
+            min-width: 0;
+        }
+
+        input[type="text"]:focus {
+            border-color: var(--primary);
+        }
+
+        button {
+            background: var(--primary);
+            color: white;
+            border: none;
+            padding: 0 24px;
+            border-radius: 8px;
+            font-size: 15px;
+            font-weight: 600;
+            font-family: inherit;
+            cursor: pointer;
+            transition: background 0.2s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            white-space: nowrap;
+        }
+
+        button:hover {
+            background: var(--primary-hover);
+        }
+
+        .refresh-btn {
+            background: transparent;
+            border: 1px solid var(--border);
+            color: var(--text-main);
+            font-size: 13px;
+            padding: 6px 14px;
+            border-radius: 6px;
+        }
+        .refresh-btn:hover {
+            background: var(--border);
+        }
+
+        /* Target Info */
+        .target-info {
+            display: none;
+            justify-content: space-between;
+            align-items: center;
+            padding: 24px;
+            background: rgba(59, 130, 246, 0.05);
+            border: 1px solid rgba(59, 130, 246, 0.2);
+            border-radius: 12px;
+            word-break: break-word;
+        }
+
+        .target-name {
+            font-size: 20px;
+            font-weight: 600;
+        }
+
+        .target-meta {
+            color: var(--primary);
+            font-size: 14px;
+            margin-top: 4px;
+        }
+
+        /* Results List */
+        .results-list {
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+        }
+
+        .result-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 24px;
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+            transition: transform 0.2s, border-color 0.2s;
+        }
+
+        .result-card:hover {
+            border-color: #444;
+            transform: translateY(-2px);
+        }
+
+        .card-top {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            gap: 20px;
+        }
+
+        .user-info {
+            flex: 1;
+            min-width: 0;
+        }
+
+        .user-info h3 {
+            font-size: 18px;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+
+        .user-id {
+            font-size: 13px;
+            color: var(--text-muted);
+            font-family: monospace;
+            margin-top: 6px;
+            word-break: break-all;
+        }
+
+        .match-score {
+            display: flex;
+            flex-direction: column;
+            align-items: flex-end;
+            flex-shrink: 0;
+            gap: 6px;
+        }
+
+        .score-value {
+            font-size: 24px;
+            font-weight: 700;
+            color: var(--text-main);
+        }
+
+        .score-label {
+            font-size: 12px;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        /* Dual Score Bars */
+        .score-bars {
+            display: flex;
+            gap: 16px;
+            align-items: center;
+        }
+
+        .score-bar-item {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+
+        .score-bar-header {
+            display: flex;
+            justify-content: space-between;
+            font-size: 12px;
+            color: var(--text-muted);
+        }
+
+        .score-bar-header .val {
+            font-weight: 600;
+            color: var(--text-main);
+        }
+
+        .score-bar-track {
+            height: 6px;
+            background: rgba(255,255,255,0.06);
+            border-radius: 3px;
+            overflow: hidden;
+        }
+
+        .score-bar-fill {
+            height: 100%;
+            border-radius: 3px;
+            transition: width 0.5s ease;
+        }
+
+        .score-bar-fill.style { background: linear-gradient(90deg, var(--primary), var(--accent)); }
+        .score-bar-fill.interest { background: linear-gradient(90deg, var(--interest), #34d399); }
+
+        .keywords {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            padding-top: 16px;
+            border-top: 1px dashed var(--border);
+        }
+
+        .keyword-tag {
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid var(--border);
+            padding: 6px 12px;
+            border-radius: 6px;
+            font-size: 13px;
+            color: #d4d4d8;
+            white-space: nowrap;
+        }
+
+        .keyword-tag.interest-tag {
+            background: rgba(16, 185, 129, 0.08);
+            border-color: rgba(16, 185, 129, 0.25);
+            color: #6ee7b7;
+        }
+
+        .keyword-tag.opinion-tag {
+            background: rgba(139, 92, 246, 0.08);
+            border-color: rgba(139, 92, 246, 0.25);
+            color: #c4b5fd;
+        }
+
+        .keyword-tag.channel-tag {
+            background: rgba(59, 130, 246, 0.08);
+            border-color: rgba(59, 130, 246, 0.25);
+            color: #93c5fd;
+        }
+
+        .keyword-tag.rare-tag {
+            background: rgba(249, 115, 22, 0.10);
+            border-color: rgba(249, 115, 22, 0.30);
+            color: #fdba74;
+        }
+
+        .keyword-tag .df-badge {
+            font-size: 10px;
+            background: rgba(255,255,255,0.08);
+            padding: 1px 5px;
+            border-radius: 3px;
+            margin-left: 4px;
+            color: var(--text-muted);
+        }
+
+        .score-bar-fill.rare { background: linear-gradient(90deg, #f97316, #fb923c); }
+
+        .section-label {
+            font-size: 11px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            color: var(--text-muted);
+            width: 100%;
+            margin-top: 4px;
+        }
+
+        .rank-badge {
+            font-size: 12px;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-weight: 600;
+            flex-shrink: 0;
+        }
+        .rank-1 { background: rgba(239, 68, 68, 0.15); color: #ef4444; border: 1px solid rgba(239, 68, 68, 0.3); }
+        .rank-2 { background: rgba(249, 115, 22, 0.15); color: #f97316; border: 1px solid rgba(249, 115, 22, 0.3); }
+        .rank-3 { background: rgba(234, 179, 8, 0.15); color: #eab308; border: 1px solid rgba(234, 179, 8, 0.3); }
+        .rank-other { background: var(--border); color: var(--text-muted); border: 1px solid transparent; }
+
+        .loading-state {
+            display: none;
+            text-align: center;
+            padding: 40px;
+            color: var(--text-muted);
+        }
+
+        .spinner {
+            width: 24px;
+            height: 24px;
+            border: 3px solid var(--border);
+            border-top-color: var(--primary);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 16px auto;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        @media (max-width: 600px) {
+            .search-box { flex-direction: column; }
+            button { padding: 14px; }
+            .card-top { flex-direction: column; gap: 12px; }
+            .match-score { align-items: flex-start; }
+            header { padding: 16px 20px; }
+            main { padding: 20px 16px; }
+            .score-bars { flex-direction: column; }
+            .weight-sliders { flex-direction: column; }
+        }
+
+        .weight-sliders {
+            display: flex;
+            gap: 16px;
+            margin-top: 12px;
+            padding: 16px;
+            background: rgba(255,255,255,0.02);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+        }
+
+        .weight-slider-item {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+
+        .weight-slider-item label {
+            font-size: 12px;
+            color: var(--text-muted);
+            display: flex;
+            justify-content: space-between;
+        }
+
+        .weight-slider-item label .wval {
+            color: var(--text-main);
+            font-weight: 600;
+        }
+
+        .weight-slider-item input[type="range"] {
+            -webkit-appearance: none;
+            width: 100%;
+            height: 6px;
+            background: var(--border);
+            border-radius: 3px;
+            outline: none;
+        }
+
+        .weight-slider-item input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            width: 16px;
+            height: 16px;
+            border-radius: 50%;
+            background: var(--primary);
+            cursor: pointer;
+            border: 2px solid var(--bg);
+        }
+
+        .weight-slider-item.interest input[type="range"]::-webkit-slider-thumb { background: var(--interest); }
+        .weight-slider-item.rare input[type="range"]::-webkit-slider-thumb { background: #f97316; }
+    </style>
+</head>
+<body>
+
+    <header>
+        <div class="logo">
+            <div class="logo-icon"></div>
+            Stylometry Matrix
+        </div>
+        <div class="status-badge" id="statusBadge">
+            <div class="status-dot" id="dot"></div>
+            <span id="statusText">Connecting...</span>
+        </div>
+    </header>
+
+    <main>
+        <div class="search-container">
+            <h1>Find Alt-Accounts</h1>
+            <p style="color: var(--text-muted); font-size: 14px; margin-top: -8px;">Enter an author ID to find users with similar chatting patterns and interests.</p>
+            <div class="search-box">
+                <input type="text" id="targetInput" placeholder="Enter target authorId (e.g. UC123...)" onkeypress="if(event.key === 'Enter') analyze()">
+                <button onclick="analyze()">Deep Scan</button>
+            </div>
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 8px;">
+                <span id="cacheInfo" style="font-size: 13px; color: var(--text-muted);">Cache: --</span>
+                <button class="refresh-btn" onclick="refreshCache()">Force Cache Rebuild</button>
+            </div>
+            <div class="weight-sliders">
+                <div class="weight-slider-item">
+                    <label>✍️ 문체 <span class="wval" id="wsLabel">40%</span></label>
+                    <input type="range" id="wsSlider" min="0" max="100" value="40" oninput="updateWeightLabel()">
+                </div>
+                <div class="weight-slider-item interest">
+                    <label>🎯 관심사 <span class="wval" id="wiLabel">30%</span></label>
+                    <input type="range" id="wiSlider" min="0" max="100" value="30" oninput="updateWeightLabel()">
+                </div>
+                <div class="weight-slider-item rare">
+                    <label>🔥 희귀용어 <span class="wval" id="wrLabel">30%</span></label>
+                    <input type="range" id="wrSlider" min="0" max="100" value="30" oninput="updateWeightLabel()">
+                </div>
+            </div>
+        </div>
+
+        <div class="target-info" id="targetDash">
+            <div>
+                <div class="target-name" id="tgtName">Target Name</div>
+                <div class="target-meta" id="tgtMeta">ID: -- | Analyzed: 0 msgs</div>
+            </div>
+            <div style="text-align: right; color: var(--text-muted); font-size: 13px; flex-shrink: 0;">
+                Compute Time<br>
+                <strong style="color: var(--text-main); font-size: 16px;" id="tgtTime">0.00s</strong>
+            </div>
+        </div>
+
+        <div class="loading-state" id="loading">
+            <div class="spinner"></div>
+            <div>Analyzing style vectors and interest patterns...</div>
+        </div>
+
+        <div class="results-list" id="resultGrid">
+            <!-- Results will be injected here -->
+        </div>
+    </main>
+
+    <script>
+        async function checkStatus() {
+            try {
+                const res = await fetch('/api/status');
+                const data = await res.json();
+                const text = document.getElementById('statusText');
+                const dot = document.getElementById('dot');
+                const cacheInfo = document.getElementById('cacheInfo');
+
+                if (data.isAnalyzing) {
+                    text.textContent = 'Building Cache';
+                    dot.className = 'status-dot busy';
+                    cacheInfo.textContent = data.progress || 'Processing database...';
+                } else if (data.isReady) {
+                    text.textContent = 'System Ready';
+                    dot.className = 'status-dot online';
+                    cacheInfo.textContent = `Indexed Vectors: ${data.totalUsers.toLocaleString()} users`;
+                } else {
+                    text.textContent = 'Offline';
+                    dot.className = 'status-dot';
+                    cacheInfo.textContent = 'No cache available';
+                }
+            } catch (e) {
+                document.getElementById('statusText').textContent = 'Error';
+                document.getElementById('dot').className = 'status-dot';
+            }
+        }
+
+        async function refreshCache() {
+            if(!confirm("Warning: Rebuilding cache takes heavy computation. Proceed?")) return;
+            try {
+                const res = await fetch('/api/refresh', { method: 'POST' });
+                alert((await res.json()).message || 'Started');
+                checkStatus();
+            } catch(e) {}
+        }
+
+        function esc(s) { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
+
+        function updateWeightLabel() {
+            document.getElementById('wsLabel').textContent = document.getElementById('wsSlider').value + '%';
+            document.getElementById('wiLabel').textContent = document.getElementById('wiSlider').value + '%';
+            document.getElementById('wrLabel').textContent = document.getElementById('wrSlider').value + '%';
+        }
+
+        async function analyze() {
+            const target = document.getElementById('targetInput').value.trim();
+            if (!target) return;
+
+            const loading = document.getElementById('loading');
+            const targetDash = document.getElementById('targetDash');
+            const grid = document.getElementById('resultGrid');
+
+            loading.style.display = 'block';
+            targetDash.style.display = 'none';
+            grid.innerHTML = '';
+
+            try {
+                const startT = performance.now();
+                const ws = parseInt(document.getElementById('wsSlider').value) / 100;
+                const wi = parseInt(document.getElementById('wiSlider').value) / 100;
+                const wr = parseInt(document.getElementById('wrSlider').value) / 100;
+                const res = await fetch(`/api/analyze?target=${encodeURIComponent(target)}&ws=${ws}&wi=${wi}&wr=${wr}`);
+                const data = await res.json();
+                const endT = performance.now();
+
+                if (!res.ok) throw new Error(data.error);
+
+                document.getElementById('tgtName').textContent = data.target.authorName || 'Unknown User';
+                document.getElementById('tgtMeta').textContent = `ID: ${data.target.authorId} | Analyzed Logs: ${data.target.msgCount}`;
+                document.getElementById('tgtTime').textContent = ((endT - startT) / 1000).toFixed(3) + 's';
+
+                if(data.results.length === 0) {
+                    grid.innerHTML = '<div style="text-align:center; padding: 40px; color: var(--text-muted); border: 1px dashed var(--border); border-radius: 12px;">No high-confidence matches found.</div>';
+                } else {
+                    data.results.forEach((r, idx) => {
+                        const simPct = (r.similarity * 100).toFixed(1);
+                        const stylePct = (r.styleSim * 100).toFixed(1);
+                        const intPct = (r.interestSim * 100).toFixed(1);
+                        const rarePct = ((r.rareSim || 0) * 100).toFixed(1);
+                        
+                        let rankClass = 'rank-other';
+                        if (idx === 0) rankClass = 'rank-1';
+                        else if (idx === 1) rankClass = 'rank-2';
+                        else if (idx === 2) rankClass = 'rank-3';
+
+                        const card = document.createElement('div');
+                        card.className = 'result-card';
+
+                        // 관심사 태그 생성
+                        const ti = r.topInterests || {};
+                        let interestHTML = '';
+
+                        if (ti.channels && ti.channels.length > 0) {
+                            interestHTML += `<div class="section-label">📺 공통 채널</div>`;
+                            interestHTML += ti.channels.map(c => `<div class="keyword-tag channel-tag">${esc(c)}</div>`).join('');
+                        }
+                        if (ti.topics && ti.topics.length > 0) {
+                            interestHTML += `<div class="section-label">💬 공통 관심사</div>`;
+                            interestHTML += ti.topics.map(t => `<div class="keyword-tag interest-tag">${esc(t)}</div>`).join('');
+                        }
+                        if (ti.opinions && ti.opinions.length > 0) {
+                            interestHTML += `<div class="section-label">🎯 공통 선호도</div>`;
+                            interestHTML += ti.opinions.map(o => `<div class="keyword-tag opinion-tag">${esc(o)}</div>`).join('');
+                        }
+
+                        // 희귀 공유 용어 태그
+                        const rt = r.rareTerms || [];
+                        let rareHTML = '';
+                        if (rt.length > 0) {
+                            rareHTML = `<div class="section-label">🔥 희귀 공유 용어 (둘만 쓰는 단어)</div>`;
+                            rareHTML += rt.map(x => `<div class="keyword-tag rare-tag">${esc(x.term)}<span class="df-badge">${x.users}명</span></div>`).join('');
+                        }
+
+                        card.innerHTML = `
+                            <div class="card-top">
+                                <div class="user-info">
+                                    <h3>
+                                        <span class="rank-badge ${rankClass}">#${idx + 1}</span>
+                                        ${esc(r.authorName || 'Unknown User')}
+                                    </h3>
+                                    <div class="user-id">${esc(r.authorId)} &middot; ${r.msgCount} msgs</div>
+                                </div>
+                                <div class="match-score">
+                                    <div class="score-value">${simPct}%</div>
+                                    <div class="score-label">Combined</div>
+                                </div>
+                            </div>
+                            <div class="score-bars">
+                                <div class="score-bar-item">
+                                    <div class="score-bar-header">
+                                        <span>✍️ 문체</span>
+                                        <span class="val">${stylePct}%</span>
+                                    </div>
+                                    <div class="score-bar-track">
+                                        <div class="score-bar-fill style" style="width: ${Math.min(stylePct, 100)}%"></div>
+                                    </div>
+                                </div>
+                                <div class="score-bar-item">
+                                    <div class="score-bar-header">
+                                        <span>🎯 관심사</span>
+                                        <span class="val">${intPct}%</span>
+                                    </div>
+                                    <div class="score-bar-track">
+                                        <div class="score-bar-fill interest" style="width: ${Math.min(intPct, 100)}%"></div>
+                                    </div>
+                                </div>
+                                <div class="score-bar-item">
+                                    <div class="score-bar-header">
+                                        <span>🔥 희귀용어</span>
+                                        <span class="val">${rarePct}%</span>
+                                    </div>
+                                    <div class="score-bar-track">
+                                        <div class="score-bar-fill rare" style="width: ${Math.min(rarePct, 100)}%"></div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="keywords">
+                                ${rareHTML}
+                                <div class="section-label">✍️ 문체 유사 패턴</div>
+                                ${r.topTerms.map(t => `<div class="keyword-tag">${esc(t)}</div>`).join('')}
+                                ${interestHTML}
+                            </div>
+                        `;
+                        grid.appendChild(card);
+                    });
+                }
+
+                loading.style.display = 'none';
+                targetDash.style.display = 'flex';
+
+            } catch (err) {
+                loading.style.display = 'none';
+                alert(err.message);
+            }
+        }
+
+        checkStatus();
+        setInterval(checkStatus, 3000);
+    </script>
+</body>
+</html>
