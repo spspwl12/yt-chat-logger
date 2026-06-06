@@ -1257,7 +1257,10 @@
                 <button class="channel-add-btn" id="channelAddBtn">추가</button>
             </div>
             <div class="channel-list" id="channelList"></div>
-            <div class="channel-modal-status info" id="channelModalStatus"></div>
+            <div class="channel-modal-status info" id="channelModalStatus">
+                <span id="channelStatusText"></span>
+                <span id="channelTotalRate" style="margin-left: 4px;">(총합: 0/0초)</span>
+            </div>
         </div>
     </div>
 
@@ -2534,6 +2537,10 @@
         }
 
         function updateChatRateBadges() {
+            let totalLastCnt = 0;
+            let totalCurCnt = 0;
+            let elapsed = chatRateData.elapsed || 0;
+
             channelList.querySelectorAll('.channel-item').forEach(el => {
                 const id = el.getAttribute('data-channel-id');
                 const badge = el.querySelector('.chat-rate-badge');
@@ -2541,10 +2548,12 @@
 
                 const last = (chatRateData.last || {});
                 const current = (chatRateData.current || {});
-                const elapsed = chatRateData.elapsed || 0;
 
                 const lastCnt = last[id] || 0;
                 const curCnt = current[id] || 0;
+
+                totalLastCnt += lastCnt;
+                totalCurCnt += curCnt;
 
                 // 확정값이 있으면 확정값 표시, 없으면 현재 집계중 표시
                 if (lastCnt > 0) {
@@ -2555,6 +2564,17 @@
                     badge.textContent = '0/' + elapsed + '초';
                 }
             });
+
+            const totalRateEl = document.getElementById('channelTotalRate');
+            if (totalRateEl) {
+                if (totalLastCnt > 0) {
+                    totalRateEl.textContent = '(총합: ' + totalLastCnt + '/60초)';
+                } else if (totalCurCnt > 0) {
+                    totalRateEl.textContent = '(총합: ' + totalCurCnt + '/' + elapsed + '초)';
+                } else {
+                    totalRateEl.textContent = '(총합: 0/' + elapsed + '초)';
+                }
+            }
         }
 
         function startChatRatePolling() {
@@ -2592,7 +2612,8 @@
         }
 
         function setChannelStatus(msg, type = 'info') {
-            channelModalStatus.textContent = msg;
+            const statusText = document.getElementById('channelStatusText');
+            if (statusText) statusText.textContent = msg;
             channelModalStatus.className = 'channel-modal-status ' + type;
         }
 
