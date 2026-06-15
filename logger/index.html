@@ -1257,9 +1257,16 @@
                 <button class="channel-add-btn" id="channelAddBtn">추가</button>
             </div>
             <div class="channel-list" id="channelList"></div>
-            <div class="channel-modal-status info" id="channelModalStatus">
-                <span id="channelStatusText"></span>
-                <span id="channelTotalRate" style="margin-left: 4px;">(총합: 0/0초)</span>
+            <div class="channel-modal-status info" id="channelModalStatus" style="display: flex; justify-content: space-between; align-items: center; text-align: left;">
+                <div>
+                    <span id="channelStatusText"></span>
+                    <span id="channelTotalRate" style="margin-left: 4px;">(총합: 0/0초)</span>
+                </div>
+                <select id="chatRateUnitSelect" style="background: #1e1e1e; border: 1px solid #404040; border-radius: 4px; color: #aaa; font-size: 11px; outline: none; cursor: pointer; padding: 2px;">
+                    <option value="60">60초</option>
+                    <option value="3600">60분</option>
+                    <option value="43200">12시간</option>
+                </select>
             </div>
         </div>
     </div>
@@ -2530,7 +2537,9 @@
 
         async function fetchChatRate() {
             try {
-                const res = await fetch('/rate');
+                const unitSelect = document.getElementById('chatRateUnitSelect');
+                const unit = unitSelect ? parseInt(unitSelect.value) : 60;
+                const res = await fetch('/rate?unit=' + unit);
                 if (res.ok) chatRateData = await res.json();
             } catch { /* 무시 */ }
             updateChatRateBadges();
@@ -2540,6 +2549,12 @@
             let totalLastCnt = 0;
             let totalCurCnt = 0;
             let elapsed = chatRateData.elapsed || 0;
+
+            const unitSelect = document.getElementById('chatRateUnitSelect');
+            const unit = unitSelect ? parseInt(unitSelect.value) : 60;
+            let unitLabel = '60초';
+            if (unit === 3600) unitLabel = '60분';
+            else if (unit === 43200) unitLabel = '12시간';
 
             channelList.querySelectorAll('.channel-item').forEach(el => {
                 const id = el.getAttribute('data-channel-id');
@@ -2557,22 +2572,24 @@
 
                 // 확정값이 있으면 확정값 표시, 없으면 현재 집계중 표시
                 if (lastCnt > 0) {
-                    badge.textContent = lastCnt + '/60초';
+                    badge.textContent = lastCnt + '/' + unitLabel;
                 } else if (curCnt > 0) {
                     badge.textContent = curCnt + '/' + elapsed + '초';
                 } else {
-                    badge.textContent = '0/' + elapsed + '초';
+                    if (unit !== 60) badge.textContent = '0/' + unitLabel;
+                    else badge.textContent = '0/' + elapsed + '초';
                 }
             });
 
             const totalRateEl = document.getElementById('channelTotalRate');
             if (totalRateEl) {
                 if (totalLastCnt > 0) {
-                    totalRateEl.textContent = '(총합: ' + totalLastCnt + '/60초)';
+                    totalRateEl.textContent = '(총합: ' + totalLastCnt + '/' + unitLabel + ')';
                 } else if (totalCurCnt > 0) {
                     totalRateEl.textContent = '(총합: ' + totalCurCnt + '/' + elapsed + '초)';
                 } else {
-                    totalRateEl.textContent = '(총합: 0/' + elapsed + '초)';
+                    if (unit !== 60) totalRateEl.textContent = '(총합: 0/' + unitLabel + ')';
+                    else totalRateEl.textContent = '(총합: 0/' + elapsed + '초)';
                 }
             }
         }
@@ -2658,7 +2675,16 @@
                 el.setAttribute('data-channel-id', id);
                 const rateCnt = ((chatRateData.last || {})[id]) || ((chatRateData.current || {})[id]) || 0;
                 const rateElapsed = chatRateData.elapsed || 0;
-                const rateLabel = rateCnt > 0 && (chatRateData.last || {})[id] ? rateCnt + '/60초' : rateCnt + '/' + rateElapsed + '초';
+                
+                let unitLabel = '60초';
+                const unitSelect = document.getElementById('chatRateUnitSelect');
+                if (unitSelect) {
+                    const unit = parseInt(unitSelect.value);
+                    if (unit === 3600) unitLabel = '60분';
+                    else if (unit === 43200) unitLabel = '12시간';
+                }
+                const isFixed = (chatRateData.last || {})[id];
+                const rateLabel = isFixed ? rateCnt + '/' + unitLabel : rateCnt + '/' + rateElapsed + '초';
                 el.innerHTML = `
                     <div class="channel-item-dot"></div>
                     <span class="channel-item-id" title="${id}">${id}</span>
@@ -2804,6 +2830,14 @@
             e.preventDefault();
             openChannelModal();
         });
+        
+        const chatRateUnitSelect = document.getElementById('chatRateUnitSelect');
+        if (chatRateUnitSelect) {
+            chatRateUnitSelect.addEventListener('change', () => {
+                fetchChatRate();
+            });
+        }
+        
         resizeChipInput();
         load(false, 0, "down");
     </script>

@@ -9,30 +9,36 @@ const mecab = require('./mecab-ya.js');
 
 const yt = {};
 
-// ─── 채널별 채팅 속도 집계 (더블 버퍼, 60초) ───
-const RATE_WINDOW_MS = 60 * 1000;
-let currentCounts = {};   // 현재 집계 중
-let lastCounts = {};      // 이전 60초 확정값
-let windowStartTime = Date.now();
+// ─── 채널별 채팅 속도 집계 (더블 버퍼, 다중 윈도우) ───
+const RATE_WINDOWS = {
+    60:    { ms: 60 * 1000,       current: {}, last: {}, start: Date.now() },
+    3600:  { ms: 60 * 60 * 1000,  current: {}, last: {}, start: Date.now() },
+    43200: { ms: 12 * 60 * 60 * 1000, current: {}, last: {}, start: Date.now() },
+};
 
-// 60초마다 버퍼 스왑
-setInterval(() => {
-    lastCounts = currentCounts;
-    currentCounts = {};
-    windowStartTime = Date.now();
-}, RATE_WINDOW_MS);
-
-// 채팅 수신 시 단순 카운트 증가 (O(1))
-function recordChat(id) {
-    currentCounts[id] = (currentCounts[id] || 0) + 1;
+// 각 윈도우마다 독립적인 버퍼 스왑
+for (const [unit, w] of Object.entries(RATE_WINDOWS)) {
+    setInterval(() => {
+        w.last = w.current;
+        w.current = {};
+        w.start = Date.now();
+    }, w.ms);
 }
 
-// 현재 카운트 반환: 확정값 + 현재 집계 중인 값 + 경과시간
-function getChatRates() {
-    const elapsed = Math.floor((Date.now() - windowStartTime) / 1000);
+// 채팅 수신 시 모든 윈도우에 카운트 증가 (O(1))
+function recordChat(id) {
+    for (const w of Object.values(RATE_WINDOWS)) {
+        w.current[id] = (w.current[id] || 0) + 1;
+    }
+}
+
+// 지정 단위의 카운트 반환: 확정값 + 현재 집계 중인 값 + 경과시간
+function getChatRates(unit) {
+    const w = RATE_WINDOWS[unit] || RATE_WINDOWS[60];
+    const elapsed = Math.floor((Date.now() - w.start) / 1000);
     return {
-        last: { ...lastCounts },
-        current: { ...currentCounts },
+        last: { ...w.last },
+        current: { ...w.current },
         elapsed
     };
 }
@@ -172,7 +178,7 @@ async function createLive(id, reset) {
 
 function deleteLive(id) {
     if (!id || !yt[id]) return;
-    
+
     yt[id].error = 99999;
     yt[id].obj && yt[id].obj.stop();
     yt[id].obj = null;
@@ -197,7 +203,7 @@ parentPort.on('message', (msg) => {
             deleteLive(msg.id);
             break;
         case 'getRate':
-            parentPort.postMessage({ type: 'rateResult', data: getChatRates() });
+            parentPort.postMessage({ type: 'rateResult', data: getChatRates(msg.unit) });
             break;
         case 'ping':
             parentPort.postMessage({ type: 'pong' });

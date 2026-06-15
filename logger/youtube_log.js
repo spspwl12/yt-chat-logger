@@ -262,6 +262,8 @@ app.get('/status', (req, res) => {
 app.get('/rate', (req, res) => {
     if (!chatWorker) return res.json({});
 
+    const unit = parseInt(req.query.unit) || 60;
+
     let responded = false;
     const timeout = setTimeout(() => {
         if (!responded) { responded = true; res.json({}); }
@@ -276,7 +278,7 @@ app.get('/rate', (req, res) => {
     }
 
     chatWorker.on('message', onMsg);
-    chatWorker.postMessage({ type: 'getRate' });
+    chatWorker.postMessage({ type: 'getRate', unit });
 });
 
 // ─── 쿼리 최적화 함수들 ───
