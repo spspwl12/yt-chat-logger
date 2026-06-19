@@ -3,11 +3,17 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.parseChatData = exports.getOptionsFromLivePage = void 0;
 function getOptionsFromLivePage(data) {
     let liveId;
-    const idResult = data.match(/<link rel="canonical" href="https:\/\/www.youtube.com\/watch\?v=(.+?)">/);
+    const idResult = data.match(/<link rel="canonical" href="https:\/\/www.youtube.com\/watch\?v=([^"]+)">/);
+    const idResult2 = data.match(/<meta property="og:video:url" content="https:\/\/www.youtube.com\/watch\?v=([^"]+)">/);
+    const idResult3 = data.match(/["']videoId["']\s*:\s*["']([^"']+)["']/);
+    
     if (idResult) {
         liveId = idResult[1];
-    }
-    else {
+    } else if (idResult2) {
+        liveId = idResult2[1];
+    } else if (idResult3) {
+        liveId = idResult3[1];
+    } else {
         throw new Error("Live Stream was not found");
     }
     const replayResult = data.match(/['"]isReplay['"]\s*:\s*(true)/);

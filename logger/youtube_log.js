@@ -4,6 +4,8 @@
 // ═══════════════════════════════════════════════════════════════
 const { Worker } = require('worker_threads');
 const express = require("express");
+const helmet = require("helmet");
+const compression = require('compression');
 const mysql = require("mysql2/promise");
 const path = require("path");
 const fs = require('fs');
@@ -22,6 +24,35 @@ const DB_CONNECT_TIMEOUT = 60000;
 const DB_QUERY_TIMEOUT = 60000;
 
 const app = express();
+
+app.use(helmet({
+    contentSecurityPolicy: false
+}));
+
+app.use(compression());
+
+// 하드코딩된 아이디/비밀번호 (Basic Auth) - 아무나 사이트에 들어가지 못하게 차단
+// app.use((req, res, next) => {
+//     const HARDCODED_ID = '';
+//     const HARDCODED_PW = ''; // 필요시 변경 가능
+
+//     const authheader = req.headers.authorization;
+//     if (!authheader) {
+//         res.setHeader('WWW-Authenticate', 'Basic realm="Secure Area"');
+//         return res.status(401).send('인증이 필요합니다.');
+//     }
+
+//     const auth = Buffer.from(authheader.split(' ')[1], 'base64').toString().split(':');
+//     const user = auth[0];
+//     const pass = auth[1];
+
+//     if (user === HARDCODED_ID && pass === HARDCODED_PW) {
+//         next();
+//     } else {
+//         res.setHeader('WWW-Authenticate', 'Basic realm="Secure Area"');
+//         return res.status(401).send('인증에 실패했습니다. 아이디 또는 비밀번호를 확인해주세요.');
+//     }
+// });
 
 // ─── Worker Threads ───
 let chatWorker = null;
@@ -206,16 +237,6 @@ function getConnectionWithTimeout(thePool, timeoutMs) {
             });
     });
 }
-
-// ─── Express 라우트 ───
-app.use((req, res, next) => {
-    res.header('Access-Control-Allow-Origin', '*');
-    res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
-    res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization');
-    if (req.method === 'OPTIONS')
-        return res.sendStatus(200);
-    next();
-});
 
 app.get("/", (req, res) => {
     res.sendFile(path.join(__dirname, "index.html"));
@@ -572,7 +593,7 @@ app.listen(PORT, () => {
             } catch (err) {
                 console.error(`[Main] Read pool health ping failed: ${err.message}`);
                 console.log('[Main] Restarting Read pool...');
-                readPool.end().catch(() => {});
+                readPool.end().catch(() => { });
                 initReadPool();
             }
         }
