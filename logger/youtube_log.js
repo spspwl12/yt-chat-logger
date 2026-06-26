@@ -1,11 +1,12 @@
 // ═══════════════════════════════════════════════════════════════
-// Main Thread: Express 서버 (쿼리 전용)
+// Main Thread: Express HTTPS 서버 (쿼리 전용)
 // Worker Threads를 사용한 3-tier 아키텍처
 // ═══════════════════════════════════════════════════════════════
 const { Worker } = require('worker_threads');
 const express = require("express");
 const helmet = require("helmet");
 const compression = require('compression');
+const https = require('https');
 const mysql = require("mysql2/promise");
 const path = require("path");
 const fs = require('fs');
@@ -14,6 +15,59 @@ const mecab = require('./mecab-ya.js');
 
 const DATA_FILE = path.join(__dirname, 'data.json');
 const PORT = 3000;
+
+// ─── SSL 인증서 설정 ───
+const CERT_DIR = path.join(__dirname, 'certs');
+const SSL_KEY_PATH = path.join(CERT_DIR, 'server.key');
+const SSL_CERT_PATH = path.join(CERT_DIR, 'server.crt');
+
+function ensureSslCerts() {
+    if (fs.existsSync(SSL_KEY_PATH) && fs.existsSync(SSL_CERT_PATH)) {
+        console.log('[SSL] Using existing certificates');
+        return {
+            key: fs.readFileSync(SSL_KEY_PATH),
+            cert: fs.readFileSync(SSL_CERT_PATH)
+        };
+    }
+
+    console.log('[SSL] Generating self-signed certificate...');
+    const forge = require('node-forge');
+    const pki = forge.pki;
+
+    // RSA 2048 키 쌍 생성
+    const keys = pki.rsa.generateKeyPair(2048);
+    const cert = pki.createCertificate();
+    cert.publicKey = keys.publicKey;
+    cert.serialNumber = Date.now().toString(16);
+    cert.validity.notBefore = new Date();
+    cert.validity.notAfter = new Date();
+    cert.validity.notAfter.setFullYear(cert.validity.notBefore.getFullYear() + 10);
+
+    const attrs = [{ name: 'commonName', value: 'localhost' }];
+    cert.setSubject(attrs);
+    cert.setIssuer(attrs);
+    cert.setExtensions([
+        { name: 'basicConstraints', cA: true },
+        { name: 'subjectAltName', altNames: [
+            { type: 2, value: 'localhost' },
+            { type: 7, ip: '127.0.0.1' }
+        ]}
+    ]);
+
+    cert.sign(keys.privateKey, forge.md.sha256.create());
+
+    const pemKey = pki.privateKeyToPem(keys.privateKey);
+    const pemCert = pki.certificateToPem(cert);
+
+    if (!fs.existsSync(CERT_DIR)) {
+        fs.mkdirSync(CERT_DIR, { recursive: true });
+    }
+    fs.writeFileSync(SSL_KEY_PATH, pemKey);
+    fs.writeFileSync(SSL_CERT_PATH, pemCert);
+    console.log('[SSL] Self-signed certificate generated and saved');
+
+    return { key: pemKey, cert: pemCert };
+}
 
 const DB_HOST = "127.0.0.1";
 const DB_USER = "root";
@@ -32,27 +86,29 @@ app.use(helmet({
 app.use(compression());
 
 // 하드코딩된 아이디/비밀번호 (Basic Auth) - 아무나 사이트에 들어가지 못하게 차단
-// app.use((req, res, next) => {
-//     const HARDCODED_ID = '';
-//     const HARDCODED_PW = ''; // 필요시 변경 가능
+if (false) {
+    app.use((req, res, next) => {
+        const HARDCODED_ID = '';
+        const HARDCODED_PW = ''; // 필요시 변경 가능
 
-//     const authheader = req.headers.authorization;
-//     if (!authheader) {
-//         res.setHeader('WWW-Authenticate', 'Basic realm="Secure Area"');
-//         return res.status(401).send('인증이 필요합니다.');
-//     }
+        const authheader = req.headers.authorization;
+        if (!authheader) {
+            res.setHeader('WWW-Authenticate', 'Basic realm="Secure Area"');
+            return res.status(401).send('인증이 필요합니다.');
+        }
 
-//     const auth = Buffer.from(authheader.split(' ')[1], 'base64').toString().split(':');
-//     const user = auth[0];
-//     const pass = auth[1];
+        const auth = Buffer.from(authheader.split(' ')[1], 'base64').toString().split(':');
+        const user = auth[0];
+        const pass = auth[1];
 
-//     if (user === HARDCODED_ID && pass === HARDCODED_PW) {
-//         next();
-//     } else {
-//         res.setHeader('WWW-Authenticate', 'Basic realm="Secure Area"');
-//         return res.status(401).send('인증에 실패했습니다. 아이디 또는 비밀번호를 확인해주세요.');
-//     }
-// });
+        if (user === HARDCODED_ID && pass === HARDCODED_PW) {
+            next();
+        } else {
+            res.setHeader('WWW-Authenticate', 'Basic realm="Secure Area"');
+            return res.status(401).send('인증에 실패했습니다. 아이디 또는 비밀번호를 확인해주세요.');
+        }
+    });
+}
 
 // ─── Worker Threads ───
 let chatWorker = null;
@@ -565,16 +621,19 @@ app.get('/api/user_history/:authorId', async (req, res) => {
 app.get("/data", (req, res) => queryChat(req, res, "down"));
 app.get("/udata", (req, res) => queryChat(req, res, "up"));
 
-// ─── 서버 시작 ───
-app.listen(PORT, () => {
+// ─── 서버 시작 (HTTPS) ───
+const sslOptions = ensureSslCerts();
+const server = https.createServer(sslOptions, app);
+
+server.listen(PORT, () => {
     console.log(`
 ╔═══════════════════════════════════════════════════════════╗
 ║  YouTube Chat Logger - Multi-threaded Architecture       ║
 ╠═══════════════════════════════════════════════════════════╣
-║  URL: http://localhost:${PORT}                             ║
+║  URL: https://localhost:${PORT}                            ║
 ║                                                           ║
 ║  Architecture:                                            ║
-║  • Main Thread  → Express API (쿼리 전용)                  ║
+║  • Main Thread  → Express HTTPS API (쿼리 전용)           ║
 ║  • Chat Worker  → 라이브 채팅 수신                         ║
 ║  • DB Worker    → 버퍼 flush (백그라운드)                  ║
 ╚═══════════════════════════════════════════════════════════╝
