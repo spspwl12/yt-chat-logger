@@ -1,0 +1,13 @@
+{
+  "db": {
+    "host": "127.0.0.1",
+    "user": "root",
+    "password": "",
+    "schema": "DATA"
+  },
+  "auth": {
+    "enabled": false,
+    "id": "",
+    "password": ""
+  }
+}

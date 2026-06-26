@@ -14,7 +14,11 @@ const zlib = require("zlib");
 const mecab = require('./mecab-ya.js');
 
 const DATA_FILE = path.join(__dirname, 'data.json');
+const CONFIG_FILE = path.join(__dirname, 'config.json');
 const PORT = 3000;
+
+// ─── 설정 파일 로드 ───
+const config = JSON.parse(fs.readFileSync(CONFIG_FILE, 'utf8'));
 
 // ─── SSL 인증서 설정 ───
 const CERT_DIR = path.join(__dirname, 'certs');
@@ -69,10 +73,10 @@ function ensureSslCerts() {
     return { key: pemKey, cert: pemCert };
 }
 
-const DB_HOST = "127.0.0.1";
-const DB_USER = "root";
-const DB_PASS = "";
-const DB_SCHEMA = "DATA";
+const DB_HOST = config.db.host;
+const DB_USER = config.db.user;
+const DB_PASS = config.db.password;
+const DB_SCHEMA = config.db.schema;
 
 const DB_CONNECT_TIMEOUT = 60000;
 const DB_QUERY_TIMEOUT = 60000;
@@ -86,10 +90,10 @@ app.use(helmet({
 app.use(compression());
 
 // 하드코딩된 아이디/비밀번호 (Basic Auth) - 아무나 사이트에 들어가지 못하게 차단
-if (false) {
+if (config.auth.enabled) {
     app.use((req, res, next) => {
-        const HARDCODED_ID = '';
-        const HARDCODED_PW = ''; // 필요시 변경 가능
+        const HARDCODED_ID = config.auth.id;
+        const HARDCODED_PW = config.auth.password;
 
         const authheader = req.headers.authorization;
         if (!authheader) {
