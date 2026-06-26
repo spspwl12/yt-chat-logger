@@ -9,5 +9,8 @@
     "enabled": false,
     "id": "",
     "password": ""
+  },
+  "web": {
+    "port": 3000
   }
 }

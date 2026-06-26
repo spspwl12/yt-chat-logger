@@ -15,7 +15,6 @@ const mecab = require('./mecab-ya.js');
 
 const DATA_FILE = path.join(__dirname, 'data.json');
 const CONFIG_FILE = path.join(__dirname, 'config.json');
-const PORT = 3000;
 
 // ─── 설정 파일 로드 ───
 const config = JSON.parse(fs.readFileSync(CONFIG_FILE, 'utf8'));
@@ -52,10 +51,12 @@ function ensureSslCerts() {
     cert.setIssuer(attrs);
     cert.setExtensions([
         { name: 'basicConstraints', cA: true },
-        { name: 'subjectAltName', altNames: [
-            { type: 2, value: 'localhost' },
-            { type: 7, ip: '127.0.0.1' }
-        ]}
+        {
+            name: 'subjectAltName', altNames: [
+                { type: 2, value: 'localhost' },
+                { type: 7, ip: '127.0.0.1' }
+            ]
+        }
     ]);
 
     cert.sign(keys.privateKey, forge.md.sha256.create());
@@ -629,19 +630,8 @@ app.get("/udata", (req, res) => queryChat(req, res, "up"));
 const sslOptions = ensureSslCerts();
 const server = https.createServer(sslOptions, app);
 
-server.listen(PORT, () => {
-    console.log(`
-╔═══════════════════════════════════════════════════════════╗
-║  YouTube Chat Logger - Multi-threaded Architecture       ║
-╠═══════════════════════════════════════════════════════════╣
-║  URL: https://localhost:${PORT}                            ║
-║                                                           ║
-║  Architecture:                                            ║
-║  • Main Thread  → Express HTTPS API (쿼리 전용)           ║
-║  • Chat Worker  → 라이브 채팅 수신                         ║
-║  • DB Worker    → 버퍼 flush (백그라운드)                  ║
-╚═══════════════════════════════════════════════════════════╝
-    `);
+server.listen(config.web.port, () => {
+    console.log(`SERVER URL: https://localhost:${config.web.port}`);
 
     initReadPool();
     initDbWorker();
